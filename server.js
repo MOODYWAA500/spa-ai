@@ -2,14 +2,51 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ==========================================
+// Keep the server alive on unexpected errors
+// ==========================================
+process.on('unhandledRejection', (e) => console.error('⚠️ unhandledRejection:', e && e.message ? e.message : e));
+process.on('uncaughtException', (e) => console.error('⚠️ uncaughtException:', e && e.message ? e.message : e));
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// ==========================================
+// Admin protection (HTTP Basic Auth)
+// Set ADMIN_PASSWORD in the environment (Render -> Environment).
+// Username can be anything.
+// ==========================================
+function safeEqual(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+function adminAuth(req, res, next) {
+  const pass = process.env.ADMIN_PASSWORD;
+  if (!pass) {
+    return res.status(500).send('ADMIN_PASSWORD is not set on the server');
+  }
+  const b64 = (req.headers.authorization || '').split(' ')[1] || '';
+  const decoded = Buffer.from(b64, 'base64').toString();
+  const idx = decoded.indexOf(':');
+  const given = idx >= 0 ? decoded.slice(idx + 1) : '';
+  if (given && safeEqual(given, pass)) return next();
+  res.set('WWW-Authenticate', 'Basic realm="Admin", charset="UTF-8"');
+  res.status(401).send('Authentication required');
+}
+
+// These must come BEFORE express.static so /admin.html can't be opened directly
+app.use('/admin', adminAuth);
+app.use('/admin.html', adminAuth);
+app.use('/api/admin', adminAuth);
 
 // Serve static frontend files from the "public" folder
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
@@ -20,9 +57,15 @@ const pool = new Pool({
   ssl: {
     rejectUnauthorized: false // Required for Neon PostgreSQL
   },
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000
+  max: 5,
+  idleTimeoutMillis: 10000,       // close idle connections before Neon does
+  connectionTimeoutMillis: 10000, // Neon may need a moment to wake up
+  keepAlive: true
+});
+
+// Without this handler an idle-connection drop crashes the whole process
+pool.on('error', (err) => {
+  console.error('⚠️ Pool error (ignored):', err.message);
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -385,7 +428,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'booking.html'));
 });
 
-// Serve Admin Dashboard App
+// Serve Admin Dashboard App (protected by adminAuth above)
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
