@@ -1,841 +1,1497 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" class="scroll-smooth">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>حجز خدمة مساج منزلية - السعودية</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ريلاكس سبا منزلي - مساج واستجمام فاخر في منزلك</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Cairo & Tajawal -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <!-- Leaflet OpenStreetMap CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-  <style>
-    body { font-family: 'Tajawal', sans-serif; background-color: #f1f5f9; color: #1e293b; }
-    input, textarea { user-select: text; }
-    .app-card { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01); }
-    .app-card-btn { background: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.03); transition: all 0.25s ease; }
-    .app-card-btn:hover { border-color: #3b82f6; box-shadow: 0 6px 16px rgba(59,130,246,0.12); }
-    .hero-bg {
-      background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(15,23,42,0.75) 100%),
-                  url('https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=800&auto=format&fit=crop');
-      background-size: cover; background-position: center;
-    }
-    .pkg-card { border: 1px solid #e2e8f0; background: #ffffff; transition: all 0.25s ease; }
-    .pkg-card.selected { border-color: #2563eb; background: #eff6ff; box-shadow: 0 4px 14px rgba(37,99,235,0.12); }
-    .pin-input { letter-spacing: 0.5em; text-align: center; }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    .step-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; transition: all 0.3s ease; }
-    .step-circle.active { background: #2563eb; color: #fff; border: 2px solid #60a5fa; box-shadow: 0 0 10px rgba(37,99,235,0.3); }
-    .step-circle.completed { background: #10b981; color: #fff; border: 2px solid #34d399; }
-    .step-circle.inactive { background: #f1f5f9; color: #94a3b8; border: 1px solid #cbd5e1; }
-    .step-line { flex: 1; height: 2px; background-color: #e2e8f0; transition: all 0.3s ease; }
-    .step-line.active { background-color: #2563eb; }
-    #mapContainer { height: 170px; width: 100%; border-radius: 12px; z-index: 10; }
-  </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sunset: {
+                            50: '#fffbf5',
+                            100: '#fef3e2',
+                            200: '#fde4c3',
+                            300: '#fccf94',
+                            400: '#f9a756',
+                            500: '#f68026', // Warm Amber Sunset
+                            600: '#e56113',
+                            700: '#be4611',
+                        },
+                        gold: {
+                            100: '#fef9c3',
+                            400: '#fbbf24',
+                            500: '#d97706',
+                            600: '#b45309',
+                            700: '#92400e',
+                        },
+                        beige: {
+                            50: '#faf7f2',
+                            100: '#f5efe6',
+                            200: '#e8ddcb',
+                            300: '#d7c4a8',
+                        },
+                        emeraldDark: '#064e3b',
+                        emeraldAccent: '#059669',
+                        emeraldLight: '#d1fae5'
+                    },
+                    fontFamily: {
+                        sans: ['Cairo', 'Tajawal', 'sans-serif'],
+                        tajawal: ['Tajawal', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Cairo', 'Tajawal', sans-serif;
+            background-color: #faf7f2;
+            color: #1e293b;
+        }
+        .bg-sunset-gradient {
+            background: linear-gradient(135deg, #f68026 0%, #d97706 50%, #be4611 100%);
+        }
+        .bg-emerald-gradient {
+            background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+        }
+        .bg-gold-gradient {
+            background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+        }
+        .text-gradient {
+            background: linear-gradient(135deg, #f68026 0%, #b45309 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .glass-header {
+            background: rgba(250, 247, 242, 0.88);
+            backdrop-filter: blur(12px);
+        }
+        .hero-pattern {
+            background-color: #faf7f2;
+            background-image: radial-gradient(#f9a756 0.75px, transparent 0.75px), radial-gradient(#f9a756 0.75px, #faf7f2 0.75px);
+            background-size: 30px 30px;
+            background-position: 0 0, 15px 15px;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #faf7f2; }
+        ::-webkit-scrollbar-thumb { background: #f9a756; border-radius: 4px; }
+        #leafletMap { height: 220px; border-radius: 1rem; z-index: 10; }
+        .pin-input { letter-spacing: 0.5em; text-align: center; }
+        input, textarea { user-select: text; }
+    </style>
 </head>
-<body class="flex justify-center items-center min-h-screen p-0 md:p-4 bg-slate-100">
+<body class="antialiased min-h-screen flex flex-col justify-between selection:bg-amber-200 selection:text-amber-900">
 
-  <div class="w-full max-w-md bg-slate-50 min-h-screen md:min-h-[840px] md:max-h-[850px] md:rounded-[40px] shadow-xl relative overflow-hidden flex flex-col border border-slate-200">
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-24 left-5 z-[60] flex flex-col gap-3 max-w-sm pointer-events-none"></div>
 
-    <!-- Header -->
-    <div class="px-6 py-3 text-center text-lg font-bold text-slate-800 tracking-wide border-b border-slate-200 bg-white z-30 flex justify-between items-center">
-      <span class="w-6"></span>
-      <span>حجز خدمة مساج منزلية</span>
-      <span class="w-6 text-xs text-blue-600 font-normal" id="stepIndicator">1/4</span>
+    <!-- Header / Navbar -->
+    <header class="sticky top-0 z-40 glass-header border-b border-amber-200/60 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <!-- Logo & Brand -->
+            <a href="#" class="flex items-center gap-3 group">
+                <div class="w-12 h-12 rounded-2xl bg-sunset-gradient flex items-center justify-center text-white shadow-lg shadow-orange-500/20 group-hover:scale-105 transition transform">
+                    <i class="fa-solid fa-spa text-2xl animate-pulse"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-2xl text-slate-900 tracking-tight leading-none">
+                        ريلاكس <span class="text-sunset-500">سبا</span>
+                    </h1>
+                    <span class="text-xs text-amber-700 font-semibold tracking-wider">سبا ومساج منزلي فاخر</span>
+                </div>
+            </a>
+
+            <!-- Live Status Badge -->
+            <div class="hidden lg:flex items-center gap-2.5 bg-emeraldDark/10 text-emeraldDark px-4 py-2 rounded-full text-xs font-black border border-emeraldDark/20 shadow-sm">
+                <span class="relative flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                <span>جاهزون الآن للقدوم لمنزلك 🚗⚡</span>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="hidden md:flex items-center gap-8 font-bold text-sm text-slate-700">
+                <a href="#dispatch" class="hover:text-sunset-500 transition">الوصول الفوري</a>
+                <a href="#services" class="hover:text-sunset-500 transition">الخدمات</a>
+                <a href="#calculator" class="hover:text-sunset-500 transition">حاسبة الأسعار</a>
+                <a href="#reviews" class="hover:text-sunset-500 transition">آراء العملاء</a>
+            </nav>
+
+            <!-- Quick Contact & Action Buttons -->
+            <div class="flex items-center gap-3">
+                <!-- My account button (visible after the client has a profile) -->
+                <button id="accountBtn" onclick="openAccount('home')" class="hidden relative items-center gap-2 text-xs font-black text-slate-800 bg-amber-100/80 hover:bg-amber-200 px-3.5 py-2.5 rounded-xl border border-amber-300 transition">
+                    <i class="fa-solid fa-user text-sunset-500"></i>
+                    <span>حسابي</span>
+                    <span id="headerBadge" class="hidden absolute -top-2 -left-2 min-w-[20px] h-5 px-1 bg-rose-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center border-2 border-white shadow-sm">0</span>
+                </button>
+                <a href="tel:920000000" class="hidden sm:flex items-center gap-2 text-xs font-black text-slate-800 bg-amber-100/80 hover:bg-amber-200 px-3.5 py-2.5 rounded-xl border border-amber-300 transition">
+                    <i class="fa-solid fa-phone text-sunset-500"></i>
+                    <span>اتصال مباشر</span>
+                </a>
+                <button onclick="openBookingModal()" class="bg-sunset-gradient hover:opacity-95 text-white font-extrabold px-5 py-2.5 rounded-xl shadow-lg shadow-orange-500/25 transition hover:scale-105 transform text-xs sm:text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-check"></i>
+                    <span>احجز الآن</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="relative hero-pattern pt-12 pb-16 md:py-20 overflow-hidden border-b border-amber-200/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+
+                <!-- Hero Content Left -->
+                <div class="lg:col-span-7 space-y-6 text-center lg:text-right">
+                    <div class="inline-flex items-center gap-2 bg-amber-100 border border-amber-300/80 px-4 py-2 rounded-full text-amber-900 text-xs font-bold shadow-sm">
+                        <i class="fa-solid fa-crown text-amber-600"></i>
+                        <span>تجربة المساج الفندقي الخمس نجوم داخل منزلك</span>
+                    </div>
+
+                    <h2 class="text-4xl sm:text-6xl font-black text-slate-900 leading-tight">
+                        استعد حيوية <span class="text-gradient">جسدك وروحك</span> في راحة بيتك
+                    </h2>
+
+                    <p class="text-slate-600 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                        أعلى مستويات الرفاهية والهدوء المباشر. كادر أخصائيين محترفين يأتون فوراً إلى موقعك بجميع التجهيزات الفندقية الكاملة، من طاولات ملكية وزيوت طبيعية معطرة ومناشف معقمة.
+                    </p>
+
+                    <!-- Primary Highlights Badges -->
+                    <div class="flex flex-wrap justify-center lg:justify-start gap-3 py-2 text-xs font-bold">
+                        <span class="bg-emeraldDark/10 text-emeraldDark border border-emeraldDark/20 px-3.5 py-2 rounded-xl flex items-center gap-2">
+                            <i class="fa-solid fa-user-doctor"></i> معالجون محترفون معتمدون
+                        </span>
+                        <span class="bg-amber-100 text-amber-900 border border-amber-300 px-3.5 py-2 rounded-xl flex items-center gap-2">
+                            <i class="fa-solid fa-droplet text-amber-600"></i> زيوت طبيعية 100%
+                        </span>
+                        <span class="bg-orange-100 text-orange-900 border border-orange-300 px-3.5 py-2 rounded-xl flex items-center gap-2">
+                            <i class="fa-solid fa-bolt text-orange-600"></i> وصول سريع خلال 30-45 دقيقة
+                        </span>
+                    </div>
+
+                    <!-- Call to Action Buttons -->
+                    <div class="pt-3 flex flex-wrap justify-center lg:justify-start gap-4">
+                        <button onclick="openBookingModal()" class="bg-sunset-gradient text-white font-extrabold text-base px-8 py-4 rounded-2xl shadow-xl shadow-orange-500/30 hover:scale-105 transition transform flex items-center gap-3">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>احجز جلستك المنزلية الآن</span>
+                        </button>
+                        <a href="#calculator" class="bg-white hover:bg-amber-50 text-slate-800 border-2 border-amber-200 font-bold text-base px-6 py-4 rounded-2xl shadow-sm transition flex items-center gap-2">
+                            <i class="fa-solid fa-calculator text-sunset-500"></i>
+                            <span>حاسبة التكلفة</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Hero Image & Showcase Card -->
+                <div class="lg:col-span-5 relative">
+                    <div class="relative mx-auto max-w-md lg:max-w-none">
+                        <div class="absolute -inset-2 bg-gradient-to-r from-amber-400 to-orange-500 rounded-3xl blur-xl opacity-30 animate-pulse"></div>
+                        <div class="relative bg-white p-3 rounded-3xl shadow-2xl border border-amber-200">
+                            <img src="https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=800" alt="جلسة مساج فاخرة" class="rounded-2xl w-full h-80 sm:h-96 object-cover">
+
+                            <!-- Floating Emerald Luxury Badge -->
+                            <div class="absolute bottom-6 right-6 bg-emeraldDark text-white p-4 rounded-2xl shadow-2xl border border-emerald-400/30 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-emerald-500/30 text-emerald-300 flex items-center justify-center font-bold text-lg">
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-xs text-emerald-100">خدمة ملكية ومعقمة بالكامل</p>
+                                    <p class="text-[10px] text-emerald-300">أرقى الزيوت والأدوات الاسترخائية</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 2: LIVE DISPATCH & HOME SPA PREPARATION BLOCK -->
+    <section id="dispatch" class="py-12 bg-gradient-to-b from-beige-100 to-amber-50 border-b border-amber-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="bg-white rounded-3xl p-6 sm:p-10 shadow-xl border-2 border-amber-300/60 relative overflow-hidden">
+                <!-- Decorative Glow Background -->
+                <div class="absolute top-0 left-0 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+
+                    <!-- Left: Status & Dispatch Info -->
+                    <div class="lg:col-span-7 space-y-5 text-right">
+                        <div class="inline-flex items-center gap-2 bg-emeraldDark text-emerald-100 px-4 py-1.5 rounded-full text-xs font-black shadow-md">
+                            <span class="relative flex h-2.5 w-2.5">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
+                            </span>
+                            <span>جاهزون الآن للقدوم لمنزلك 🚗⚡</span>
+                        </div>
+
+                        <h3 class="text-2xl sm:text-4xl font-black text-slate-900 leading-tight">
+                            فريقنا متواجد الآن بالكامل وجاهز للانطلاق إلى موقعك
+                        </h3>
+
+                        <div class="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-amber-800 bg-amber-100/70 p-3 rounded-2xl border border-amber-200">
+                            <i class="fa-solid fa-location-dot text-sunset-500 text-lg"></i>
+                            <span>متواجدون الآن في جميع أحياء جدة والرياض - التواجد عند بابك خلال 40 دقيقة</span>
+                        </div>
+
+                        <p class="text-xs sm:text-sm text-slate-600 leading-relaxed font-semibold">
+                            لا داعي لتجهيز أي شيء في منزلك! يصلك الأخصائي ومعه كافة المستلزمات تحوّل غرفتك إلى سبا فندقي راقٍ ومريح:
+                        </p>
+
+                        <!-- Equipment Items Grid -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-bold text-slate-800">
+                            <div class="p-3 bg-beige-50 rounded-xl border border-amber-200/80 flex items-center gap-2">
+                                <i class="fa-solid fa-bed text-sunset-500 text-base"></i>
+                                <span>سرير مساج فاخر</span>
+                            </div>
+                            <div class="p-3 bg-beige-50 rounded-xl border border-amber-200/80 flex items-center gap-2">
+                                <i class="fa-solid fa-fire-flame-curved text-sunset-500 text-base"></i>
+                                <span>شموع عطرية دافئة</span>
+                            </div>
+                            <div class="p-3 bg-beige-50 rounded-xl border border-amber-200/80 flex items-center gap-2">
+                                <i class="fa-solid fa-flask text-sunset-500 text-base"></i>
+                                <span>زيوت طبيعية نقية</span>
+                            </div>
+                            <div class="p-3 bg-beige-50 rounded-xl border border-amber-200/80 flex items-center gap-2">
+                                <i class="fa-solid fa-music text-sunset-500 text-base"></i>
+                                <span>موسيقى استرخائية</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Fast Action Dispatch Box -->
+                    <div class="lg:col-span-5">
+                        <div class="bg-gradient-to-br from-slate-900 to-emeraldDark text-white p-6 sm:p-8 rounded-3xl shadow-2xl border border-emerald-400/30 text-center space-y-5">
+                            <div class="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-400 flex items-center justify-center text-3xl mx-auto">
+                                <i class="fa-solid fa-truck-fast"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xl font-black">طلب انطلاق مباشر</h4>
+                                <p class="text-xs text-slate-300 mt-1">احصل على معالج مساج متفرغ الآن متواجد في منطقتك</p>
+                            </div>
+
+                            <div class="bg-white/10 p-4 rounded-2xl border border-white/10 text-right space-y-2 text-xs">
+                                <div class="flex justify-between items-center text-emerald-300 font-bold">
+                                    <span>الحالة الحالية:</span>
+                                    <span>متاح فوراً (4 معالجين بجدة / 6 بالرياض)</span>
+                                </div>
+                                <div class="flex justify-between items-center text-slate-300">
+                                    <span>متوسط زمن الوصول:</span>
+                                    <span class="font-extrabold text-amber-400">30 - 40 دقيقة</span>
+                                </div>
+                            </div>
+
+                            <button onclick="openBookingModal()" class="w-full bg-sunset-gradient hover:opacity-95 text-white font-black py-3.5 rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-bolt"></i>
+                                <span>طلب انطلاق الفريق الآن</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services Section (cards are loaded from the database) -->
+    <section id="services" class="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center space-y-3 mb-12">
+            <span class="text-sunset-500 font-extrabold text-xs uppercase tracking-widest bg-amber-100 px-4 py-1.5 rounded-full border border-amber-300">خدماتنا المحددة بعناية</span>
+            <h3 class="text-3xl sm:text-4xl font-black text-slate-900">جلسات الاسترخاء الفاخرة</h3>
+            <p class="text-slate-500 text-sm max-w-xl mx-auto">اختر الخدمة المناسبة لاحتياجات جسدك وسنقوم بتوفير كامل التجهيزات الفندقية ببيتك</p>
+        </div>
+
+        <div id="servicesGrid" class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="md:col-span-3 text-center text-slate-400 text-sm py-10">
+                <i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري تحميل الخدمات...
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Estimator Section -->
+    <section id="calculator" class="py-16 bg-amber-100/50 border-y border-amber-200">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-amber-200">
+                <div class="text-center space-y-2 mb-8">
+                    <span class="text-sunset-500 font-bold text-xs uppercase tracking-widest">تفاعلي وفوري</span>
+                    <h3 class="text-2xl sm:text-3xl font-black text-slate-900">حاسبة الخدمة المنزلية السريعة</h3>
+                    <p class="text-slate-500 text-xs sm:text-sm">اختر الترتيبات واطلع على خصومات المجموعات الفورية</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                    <!-- Calculator Controls -->
+                    <div class="space-y-6">
+                        <!-- Select Service -->
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-2">اختر نوع الجلسة:</label>
+                            <select id="calcService" onchange="calculateTotal()" class="w-full bg-slate-50 border-2 border-amber-200 text-slate-800 font-bold text-xs sm:text-sm rounded-xl p-3.5 focus:outline-none focus:border-sunset-500">
+                                <option value="">جاري التحميل...</option>
+                            </select>
+                        </div>
+
+                        <!-- Select Headcount Slider -->
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="text-xs font-extrabold text-slate-700">عدد المستفيدين في الجلسة:</label>
+                                <span id="personVal" class="text-xs font-black bg-amber-100 text-amber-900 px-3 py-1 rounded-full border border-amber-300">1 شخص</span>
+                            </div>
+                            <input type="range" id="calcPersons" min="1" max="5" value="1" oninput="calculateTotal()" class="w-full accent-orange-500 cursor-pointer h-2 bg-slate-200 rounded-lg">
+                            <div class="flex justify-between text-[11px] text-slate-500 font-bold mt-2">
+                                <span>1</span>
+                                <span>2 (خصم 10%)</span>
+                                <span>3 (خصم 15%)</span>
+                                <span>4+ (خصم 20%)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Calculation Summary Card -->
+                    <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-emeraldDark text-white rounded-2xl p-6 space-y-4 shadow-xl relative overflow-hidden border border-emerald-400/20">
+                        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+                            <span class="text-xs text-slate-300">السعر الأساسي للجلسة:</span>
+                            <span id="basePrice" class="font-bold text-sm text-slate-100">0 ر.س</span>
+                        </div>
+
+                        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+                            <span class="text-xs text-slate-300">خصم المجموعات الخاص:</span>
+                            <span id="discountVal" class="font-bold text-sm text-emerald-400">0 ر.س</span>
+                        </div>
+
+                        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+                            <span class="text-xs text-slate-300">وقت الوصول المقدر:</span>
+                            <span class="font-bold text-xs text-amber-300">خلال 35 - 40 دقيقة ⚡</span>
+                        </div>
+
+                        <div class="pt-2 flex justify-between items-end">
+                            <div>
+                                <span class="block text-[11px] text-slate-400">المبلغ الإجمالي الشامل:</span>
+                                <span id="finalTotal" class="text-3xl font-black text-amber-400">0 ر.س</span>
+                            </div>
+                            <button onclick="applyCalculatorBooking()" class="bg-sunset-gradient hover:opacity-95 text-white font-black text-xs px-5 py-3.5 rounded-xl shadow transition">
+                                اعتمد الحجز بهذه القيمة
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Booking Modal -->
+    <div id="bookingModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
+        <div class="bg-white rounded-3xl w-full max-w-xl shadow-2xl border border-amber-200 overflow-hidden relative my-auto">
+
+            <!-- Modal Header -->
+            <div class="bg-sunset-gradient text-white p-5 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-base">
+                        <i class="fa-solid fa-house-chimney-medical"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-extrabold text-base">حجز جلسة مساج منزلي فورية</h4>
+                        <p class="text-[11px] text-amber-100">إتمام الطلب في 4 خطوات بسيطة</p>
+                    </div>
+                </div>
+                <button onclick="closeBookingModal()" class="w-8 h-8 rounded-full bg-black/20 hover:bg-black/40 flex items-center justify-center text-white transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Step Progress Indicator -->
+            <div class="bg-amber-50 px-6 py-3 border-b border-amber-200 flex justify-between items-center text-xs font-bold text-slate-600">
+                <span id="stepBadge1" class="text-sunset-500">1. الخدمة</span>
+                <span id="stepBadge2" class="text-slate-400">2. الموقع</span>
+                <span id="stepBadge3" class="text-slate-400">3. الوقت</span>
+                <span id="stepBadge4" class="text-slate-400">4. الأمان التأكيدي</span>
+            </div>
+
+            <!-- Form Container Steps -->
+            <div class="p-6 space-y-4" id="modalFormContainer">
+
+                <!-- STEP 1: Service Selection -->
+                <div id="step1" class="space-y-4">
+                    <h5 class="font-extrabold text-slate-800 text-sm border-r-4 border-sunset-500 pr-2">الخطوة 1: اختيار الخدمة وعدد الأشخاص</h5>
+
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-700 mb-1.5">الخدمة المطلوبة *</label>
+                        <select id="modalService" class="w-full text-xs font-bold p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sunset-500 focus:outline-none">
+                            <option value="">جاري تحميل الخدمات...</option>
+                        </select>
+                        <p id="modalServiceError" class="text-[10px] text-rose-500 mt-1 hidden"></p>
+                    </div>
+
+                    <div class="bg-white border border-slate-300 rounded-xl p-3 flex justify-between items-center">
+                        <span class="text-xs text-slate-700 font-bold">عدد الأشخاص:</span>
+                        <div class="flex items-center gap-3">
+                            <button type="button" onclick="changePeople(-1)" class="w-7 h-7 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 font-bold hover:bg-slate-200">-</button>
+                            <span id="peopleCountVal" class="text-sm font-bold text-slate-900 w-4 text-center">1</span>
+                            <button type="button" onclick="changePeople(1)" class="w-7 h-7 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 font-bold hover:bg-slate-200">+</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">الاسم الكريم *</label>
+                            <input type="text" id="modalName" placeholder="اسمك الكامل" class="w-full p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sunset-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">رقم الجوال *</label>
+                            <input type="tel" id="modalPhone" placeholder="05xxxxxxxx" dir="ltr" class="w-full p-2.5 border border-slate-300 rounded-xl text-right focus:ring-2 focus:ring-sunset-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <p id="phoneError" class="text-[10px] text-rose-500 hidden">يرجى إدخال رقم جوال سعودي صحيح (10 أرقام ويبدأ بـ 05)</p>
+
+                    <button onclick="nextFromStep1()" class="w-full bg-sunset-gradient text-white font-extrabold py-3 rounded-xl shadow-md hover:opacity-95 transition text-xs flex items-center justify-center gap-2">
+                        <span>المتابعة لتحديد الموقع</span>
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                </div>
+
+                <!-- STEP 2: Location & Interactive Map -->
+                <div id="step2" class="space-y-4 hidden">
+                    <h5 class="font-extrabold text-slate-800 text-sm border-r-4 border-sunset-500 pr-2">الخطوة 2: تحديد موقع المنزل على الخريطة</h5>
+
+                    <button onclick="locateUserGPS()" type="button" class="w-full py-2.5 px-3 bg-emeraldDark hover:bg-emerald-900 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 shadow transition">
+                        <i class="fa-solid fa-crosshairs text-amber-300"></i>
+                        <span>تحديد موقعي تلقائياً (المدينة والحي)</span>
+                    </button>
+                    <p id="geoStatusText" class="text-[10px] text-center text-emeraldDark hidden font-bold">
+                        <i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري تحديد موقعك واستخراج المدينة والحي...
+                    </p>
+
+                    <!-- Interactive Leaflet Map -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">حدد موقع بيتك بالضبط على الخريطة (اضغط أو اسحب الدبوس):</label>
+                        <div id="leafletMap" class="w-full bg-slate-100 border border-amber-300"></div>
+                        <p id="mapAddressText" class="text-[11px] text-emeraldDark font-bold mt-1">📍 اضغط على الخريطة أو استخدم زر التحديد التلقائي</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">المدينة *</label>
+                            <input type="text" id="modalCity" placeholder="جدة / الرياض..." class="w-full p-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sunset-500 focus:outline-none font-semibold">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">الحي *</label>
+                            <input type="text" id="modalDistrict" placeholder="اسم الحي" class="w-full p-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sunset-500 focus:outline-none font-semibold">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">اسم الشارع *</label>
+                            <input type="text" id="modalStreet" placeholder="أدخل اسم الشارع" class="w-full p-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sunset-500 focus:outline-none font-semibold">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">رقم المنزل / الفيلا *</label>
+                            <input type="text" id="modalHouse" placeholder="أدخل رقم المنزل" class="w-full p-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sunset-500 focus:outline-none font-semibold">
+                        </div>
+                    </div>
+                    <p id="locationError" class="text-[10px] text-rose-500 hidden">يرجى تعبئة المدينة والحي واسم الشارع ورقم المنزل</p>
+
+                    <div class="flex gap-2">
+                        <button onclick="goToStep(1)" class="w-1/3 bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs">سابق</button>
+                        <button onclick="nextFromStep2()" class="w-2/3 bg-sunset-gradient text-white font-extrabold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2">
+                            <span>التالي: الموعد والوقت</span>
+                            <i class="fa-solid fa-arrow-left"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 3: Time Selection -->
+                <div id="step3" class="space-y-4 hidden">
+                    <h5 class="font-extrabold text-slate-800 text-sm border-r-4 border-sunset-500 pr-2">الخطوة 3: تحديد موعد الانطلاق</h5>
+
+                    <div class="space-y-3 text-xs">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">تاريخ الجلسة *</label>
+                            <input type="date" id="modalDate" class="w-full p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sunset-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">وقت وصول المعالج *</label>
+                            <select id="modalTime" class="w-full p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sunset-500 focus:outline-none font-semibold">
+                                <option value="now">وصول فوري عاجل (خلال 35-40 دقيقة) ⚡</option>
+                                <option value="16:00">04:00 مساءً</option>
+                                <option value="18:00">06:00 مساءً</option>
+                                <option value="20:00">08:00 مساءً</option>
+                                <option value="22:00">10:00 مساءً</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">ملاحظات إضافية للمعالج</label>
+                            <textarea id="modalNotes" rows="2" placeholder="أي تفضيلات أو ملاحظات إضافية..." class="w-full p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sunset-500 focus:outline-none"></textarea>
+                        </div>
+                    </div>
+                    <p id="scheduleError" class="text-[10px] text-rose-500 hidden"></p>
+
+                    <div class="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-slate-700 space-y-1">
+                        <p class="font-bold text-amber-900">ملخص الطلب:</p>
+                        <p id="summaryServiceText" class="text-slate-600">- الجلسة: --</p>
+                        <p id="summaryPeopleText" class="text-slate-600">- عدد الأشخاص: 1</p>
+                        <p id="summaryLocationText" class="text-slate-600">- الموقع: --</p>
+                        <p id="summaryTotalText" class="text-slate-900 font-extrabold">- المبلغ الإجمالي: 0 ر.س</p>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button onclick="goToStep(2)" class="w-1/3 bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs">سابق</button>
+                        <button id="step3NextBtn" onclick="nextFromStep3()" class="w-2/3 bg-sunset-gradient text-white font-extrabold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2">
+                            <span id="step3NextLabel">التالي: الأمان والرمز السري</span>
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 4: Profile setup (secret PIN) -->
+                <div id="step4" class="space-y-4 hidden">
+                    <h5 class="font-extrabold text-slate-800 text-sm border-r-4 border-sunset-500 pr-2">الخطوة 4: إنشاء الحساب والرمز السري</h5>
+
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        لحماية خصوصيتك وتأكيد جدية الطلب، أنشئ رمزاً سرياً مكوناً من 4 أرقام وأكّده:
+                    </p>
+
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-500 mb-1">اسم العميل المسجل (غير قابل للتعديل)</label>
+                        <div class="w-full bg-slate-100 border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-700 flex items-center justify-between cursor-not-allowed">
+                            <span id="verifyNameReadonly">--</span>
+                            <i class="fa-solid fa-lock text-amber-500 text-xs"></i>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-amber-700 mb-1">أدخل الرقم السري (4 أرقام) *</label>
+                        <input type="password" id="pinInput1" maxlength="4" inputmode="numeric" placeholder="••••"
+                            class="w-full bg-white border-2 border-amber-300 rounded-xl p-2 text-center text-base font-bold text-amber-800 focus:border-sunset-500 focus:outline-none pin-input">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-amber-700 mb-1">تأكيد الرقم السري *</label>
+                        <input type="password" id="pinInput2" maxlength="4" inputmode="numeric" placeholder="••••"
+                            class="w-full bg-white border-2 border-amber-300 rounded-xl p-2 text-center text-base font-bold text-amber-800 focus:border-sunset-500 focus:outline-none pin-input">
+                    </div>
+                    <p id="pinError" class="text-[10px] text-rose-500 text-center hidden font-bold"></p>
+
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="goToStep(3)" class="w-1/3 bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-xs">سابق</button>
+                        <button id="pinSubmitBtn" onclick="submitFinalBooking()" class="w-2/3 bg-emeraldDark text-white font-black py-3 rounded-xl shadow-lg hover:bg-emerald-900 transition text-xs flex items-center justify-center gap-2 disabled:opacity-60">
+                            <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                            <span>تأكيد الرمز وإرسال الطلب</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Success Screen -->
+            <div id="modalSuccess" class="p-8 text-center space-y-4 hidden">
+                <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-3xl mx-auto animate-bounce">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <h4 class="font-black text-xl text-slate-900">تم استلام حجزك بنجاح! 🎉</h4>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    شكراً لاختيارك ريلاكس سبا منزلي. سنراجع طلبك ونعيّن لك المعالجة والسائق، وستصلك التحديثات في صفحة الإشعارات.
+                </p>
+                <div class="bg-amber-50 p-4 rounded-xl border border-amber-200 text-xs text-slate-700 space-y-1.5 text-right">
+                    <p><strong>الرقم المرجعي:</strong> <span id="resRef" class="font-bold text-amber-800">#--</span></p>
+                    <p><strong>حالة الطلب:</strong> <span class="text-amber-700 font-extrabold">قيد المراجعة ⏳</span></p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="closeBookingModal(); openAccount('appointments')" class="w-1/2 bg-sunset-gradient text-white font-bold py-3 rounded-xl text-xs">مواعيدي</button>
+                    <button onclick="closeBookingModal()" class="w-1/2 bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition text-xs">
+                        عودة للرئيسية
+                    </button>
+                </div>
+            </div>
+
+        </div>
     </div>
 
-    <!-- Stepper -->
-    <div id="progressStepper" class="px-6 py-3 border-b border-slate-200 bg-white">
-      <div class="flex items-center justify-between relative px-2">
-        <div class="flex flex-col items-center gap-1 z-10">
-          <div id="circleStep1" class="step-circle active">1</div>
-          <span class="text-[9px] text-blue-600 font-semibold">البيانات</span>
+    <!-- Account Panel (profile / appointments / notifications) -->
+    <div id="accountPanel" class="fixed inset-0 z-50 bg-beige-50 overflow-y-auto hidden">
+        <div class="w-full max-w-xl mx-auto min-h-screen flex flex-col bg-white sm:border-x sm:border-amber-100">
+
+            <!-- Top bar -->
+            <div class="flex items-center justify-between px-5 pt-5">
+                <button onclick="closeAccount()" class="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition" title="رجوع">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                <span class="text-sm font-extrabold text-slate-800">حسابي</span>
+                <span class="w-10"></span>
+            </div>
+
+            <!-- Greeting -->
+            <div class="px-5 pt-5 pb-4 flex items-center gap-3">
+                <div id="accAvatar" class="w-14 h-14 rounded-full bg-sunset-gradient text-white flex items-center justify-center text-xl font-black shrink-0">؟</div>
+                <div class="min-w-0">
+                    <h2 id="accName" class="text-lg font-black text-slate-900 truncate">--</h2>
+                    <p id="accPhone" dir="rtl" class="text-xs text-slate-400 font-semibold">--</p>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="sticky top-0 z-20 bg-white border-b border-slate-100 px-5 flex">
+                <button data-tab="home" onclick="switchTab('home')" class="acc-tab flex-1 py-3 text-sm font-bold border-b-2 border-transparent text-slate-400 transition">الرئيسية</button>
+                <button data-tab="appointments" onclick="switchTab('appointments')" class="acc-tab flex-1 py-3 text-sm font-bold border-b-2 border-transparent text-slate-400 transition">مواعيدي</button>
+                <button data-tab="notifications" onclick="switchTab('notifications')" class="acc-tab relative flex-1 py-3 text-sm font-bold border-b-2 border-transparent text-slate-400 transition">
+                    الإشعارات
+                    <span id="tabBadge" class="hidden absolute top-2 left-3 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center">0</span>
+                </button>
+            </div>
+
+            <div id="accountBody" class="px-5 py-5 space-y-3 flex-1 pb-10"></div>
         </div>
-        <div id="lineStep1" class="step-line"></div>
-        <div class="flex flex-col items-center gap-1 z-10">
-          <div id="circleStep2" class="step-circle inactive">2</div>
-          <span class="text-[9px] text-slate-400 font-semibold">الباقة</span>
-        </div>
-        <div id="lineStep2" class="step-line"></div>
-        <div class="flex flex-col items-center gap-1 z-10">
-          <div id="circleStep3" class="step-circle inactive">3</div>
-          <span class="text-[9px] text-slate-400 font-semibold">الموعد</span>
-        </div>
-        <div id="lineStep3" class="step-line"></div>
-        <div class="flex flex-col items-center gap-1 z-10">
-          <div id="circleStep4" class="step-circle inactive">4</div>
-          <span class="text-[9px] text-slate-400 font-semibold">الأمان</span>
-        </div>
-      </div>
     </div>
 
-    <!-- Content Area -->
-    <div class="flex-1 overflow-y-auto no-scrollbar relative pb-28" id="mainContent">
-
-      <!-- STEP 1: CLIENT INFO -->
-      <div id="stepInfo" class="px-5 pt-3 space-y-3">
-        <div class="text-center space-y-1 mb-2">
-          <div class="w-10 h-10 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 mx-auto text-lg">
-            <i class="fa-solid fa-user-gear"></i>
-          </div>
-          <h3 class="text-base font-bold text-slate-800">المعلومات الشخصية والموقع</h3>
-          <p class="text-[11px] text-slate-500">أدخل بياناتك وحدد موقعك على الخريطة لتسجيل الحجز</p>
-        </div>
-
-        <div class="space-y-2.5">
-          <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">الاسم الكامل *</label>
-            <input type="text" id="fullName" placeholder="أدخل اسمك الكامل"
-              class="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none shadow-sm">
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">رقم الجوال السعودي *</label>
-            <div class="relative">
-              <input type="tel" id="phone" placeholder="05XXXXXXXX" dir="ltr"
-                class="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none text-right pl-12 shadow-sm">
-              <span class="absolute left-3 top-2.5 text-[10px] text-slate-500 font-bold">🇸🇦 +966</span>
-            </div>
-            <p id="phoneError" class="text-[10px] text-rose-500 mt-1 hidden">يرجى إدخال رقم جوال سعودي صحيح (10 أرقام ويبدأ بـ 05)</p>
-          </div>
-
-          <div class="space-y-2 pt-2 border-t border-slate-200">
-            <label class="block text-xs font-bold text-blue-700">
-              <i class="fa-solid fa-map-location-dot ml-1"></i> تحديد الموقع والعنوان
-            </label>
-
-            <button onclick="locateUserGPS()" type="button"
-              class="w-full py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border border-blue-500 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition">
-              <i class="fa-solid fa-crosshairs text-amber-300 animate-pulse text-sm"></i>
-              <span>انقر هنا للتحديد التلقائي للموقع واستخراج المدينة والحي</span>
-            </button>
-
-            <p id="geoStatusText" class="text-[10px] text-center text-blue-600 hidden font-semibold">
-              <i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري تحديد موقعك واستخراج المدينة والحي...
-            </p>
-
-            <div id="mapContainer" class="border border-slate-300 shadow-sm mt-1"></div>
-
-            <div class="grid grid-cols-2 gap-2 pt-1">
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-700 mb-1">المدينة (تلقائي) *</label>
-                <input type="text" id="cityName" placeholder="الرياض / جدة..."
-                  class="w-full bg-slate-100 border border-slate-300 rounded-xl p-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none">
-              </div>
-              <div>
-                <label class="block text-[11px] font-semibold text-slate-700 mb-1">الحي (تلقائي) *</label>
-                <input type="text" id="districtName" placeholder="اسم الحي"
-                  class="w-full bg-slate-100 border border-slate-300 rounded-xl p-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none">
-              </div>
+    <!-- Testimonials Section -->
+    <section id="reviews" class="py-16 bg-amber-50/60 border-t border-amber-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+            <div class="text-center space-y-2">
+                <span class="text-sunset-500 font-extrabold text-xs uppercase tracking-widest">تجارب حقيقية</span>
+                <h3 class="text-3xl font-black text-slate-900">آراء عملائنا بالمملكة</h3>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] font-semibold text-amber-700 mb-1">اسم الشارع (يدوي) *</label>
-                <input type="text" id="streetName" placeholder="أدخل اسم الشارع"
-                  class="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs text-slate-800 focus:border-amber-500 focus:outline-none shadow-sm">
-              </div>
-              <div>
-                <label class="block text-[11px] font-semibold text-amber-700 mb-1">رقم المنزل / الفيلا (يدوي) *</label>
-                <input type="text" id="houseNo" placeholder="أدخل رقم المنزل"
-                  class="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs text-slate-800 focus:border-amber-500 focus:outline-none shadow-sm">
-              </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Testimonial 1 -->
+                <div class="bg-white p-6 rounded-2xl border border-amber-200 shadow-sm space-y-4 relative">
+                    <div class="flex text-amber-400 text-xs gap-1">
+                        <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                    </div>
+                    <p class="text-xs text-slate-600 leading-relaxed font-semibold">
+                        "خدمة سريعة وممتازة! حضر المعالج بكامل التجهيزات والزيوت العطرية المريحة في أقل من 40 دقيقة. مساج الأنسجة العميقة كان مذهلاً."
+                    </p>
+                    <div class="flex items-center gap-3 pt-2 border-t border-slate-100">
+                        <div class="w-9 h-9 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">
+                            س.م
+                        </div>
+                        <div>
+                            <h5 class="font-extrabold text-xs text-slate-800">سعود الشمري</h5>
+                            <span class="text-[10px] text-slate-400">الرياض</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Testimonial 2 -->
+                <div class="bg-white p-6 rounded-2xl border border-amber-200 shadow-sm space-y-4 relative">
+                    <div class="flex text-amber-400 text-xs gap-1">
+                        <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                    </div>
+                    <p class="text-xs text-slate-600 leading-relaxed font-semibold">
+                        "جلسة الأحجار الدافئة كانت تجربة استرخاء لا تُنسى في بيتي. التزام بالنظافة والتعقيم الفندقي الخمس نجوم."
+                    </p>
+                    <div class="flex items-center gap-3 pt-2 border-t border-slate-100">
+                        <div class="w-9 h-9 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">
+                            ن.ع
+                        </div>
+                        <div>
+                            <h5 class="font-extrabold text-xs text-slate-800">نورة العتيبي</h5>
+                            <span class="text-[10px] text-slate-400">جدة</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Testimonial 3 -->
+                <div class="bg-white p-6 rounded-2xl border border-amber-200 shadow-sm space-y-4 relative">
+                    <div class="flex text-amber-400 text-xs gap-1">
+                        <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                    </div>
+                    <p class="text-xs text-slate-600 leading-relaxed font-semibold">
+                        "حاسبة الأسعار وسهولة الحجز التفاعلي ممتازة جداً. تعامل راقٍ ووصول دقيق في الموعد المنيب."
+                    </p>
+                    <div class="flex items-center gap-3 pt-2 border-t border-slate-100">
+                        <div class="w-9 h-9 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">
+                            م.ق
+                        </div>
+                        <div>
+                            <h5 class="font-extrabold text-xs text-slate-800">م. محمد القحطاني</h5>
+                            <span class="text-[10px] text-slate-400">الدمام</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
         </div>
+    </section>
 
-        <button onclick="goToStepPackages()" class="w-full mt-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 rounded-xl shadow-md shadow-blue-500/20 text-xs">
-          التالي: اختيار الباقة <i class="fa-solid fa-arrow-left mr-2"></i>
-        </button>
-      </div>
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-400 py-12 border-t border-slate-800 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 text-center sm:text-right">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 items-center">
+                <div class="space-y-2">
+                    <div class="flex items-center justify-center sm:justify-start gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-sunset-gradient flex items-center justify-center text-white font-bold text-lg">
+                            <i class="fa-solid fa-spa"></i>
+                        </div>
+                        <span class="text-white font-black text-xl">ريلاكس سبا منزلي</span>
+                    </div>
+                    <p class="text-xs text-slate-500">رفاهية المساج الفاخر بين يديك وفي راحة منزلك بالمملكة العربية السعودية.</p>
+                </div>
 
-      <!-- STEP 2: PACKAGES -->
-      <div id="stepPackages" class="hidden px-5 pt-4 space-y-4">
-        <div class="flex items-center justify-between pb-2 border-b border-slate-200">
-          <button onclick="goToStepInfo()" class="w-8 h-8 rounded-full bg-slate-200/80 border border-slate-300 flex items-center justify-center text-slate-700">
-            <i class="fa-solid fa-arrow-right"></i>
-          </button>
-          <h3 class="text-base font-bold text-slate-800">اختر الخدمة المناسبة</h3>
-          <div class="w-8"></div>
-        </div>
+                <div class="flex justify-center gap-6 text-xs font-bold text-slate-300">
+                    <a href="#dispatch" class="hover:text-sunset-500">الوصول الفوري</a>
+                    <a href="#services" class="hover:text-sunset-500">الخدمات</a>
+                    <a href="#calculator" class="hover:text-sunset-500">الحاسبة</a>
+                </div>
 
-        <div id="packagesList" class="space-y-3"></div>
-
-        <div class="app-card rounded-xl p-3 flex justify-between items-center">
-          <span class="text-xs text-slate-700 font-semibold">عدد الأشخاص:</span>
-          <div class="flex items-center space-x-3 space-x-reverse">
-            <button onclick="changePeople(-1)" class="w-7 h-7 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 font-bold hover:bg-slate-200">-</button>
-            <span id="peopleCountVal" class="text-sm font-bold text-slate-900 w-4 text-center">1</span>
-            <button onclick="changePeople(1)" class="w-7 h-7 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 font-bold hover:bg-slate-200">+</button>
-          </div>
-        </div>
-
-        <button onclick="goToStepSchedule()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-md shadow-blue-500/20 text-xs">
-          التالي: تحديد الموعد والوقت <i class="fa-solid fa-arrow-left mr-2"></i>
-        </button>
-      </div>
-
-      <!-- STEP 3: SCHEDULE -->
-      <div id="stepSchedule" class="hidden px-5 pt-4 space-y-4">
-        <div class="flex items-center justify-between pb-2 border-b border-slate-200">
-          <button onclick="backToPackages()" class="w-8 h-8 rounded-full bg-slate-200/80 border border-slate-300 flex items-center justify-center text-slate-700">
-            <i class="fa-solid fa-arrow-right"></i>
-          </button>
-          <h3 class="text-base font-bold text-slate-800">تحديد تاريخ ووقت الحجز</h3>
-          <div class="w-8"></div>
-        </div>
-
-        <div class="space-y-3">
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1">تاريخ الحجز (DD/MM/2026) *</label>
-              <div class="flex items-center gap-1 bg-white border border-slate-300 rounded-xl p-2 text-xs text-slate-800 focus-within:border-blue-500 shadow-sm">
-                <input type="number" id="bookingDay" min="1" max="31" placeholder="DD"
-                  class="w-8 bg-transparent text-center text-slate-800 placeholder-slate-400 focus:outline-none font-bold">
-                <span class="text-slate-400 font-bold">/</span>
-                <input type="number" id="bookingMonth" min="1" max="12" placeholder="MM"
-                  class="w-8 bg-transparent text-center text-slate-800 placeholder-slate-400 focus:outline-none font-bold">
-                <span class="text-slate-400 font-bold">/</span>
-                <span class="text-blue-600 font-bold px-1">2026</span>
-              </div>
+                <div class="text-center sm:text-left">
+                    <button onclick="openBookingModal()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-5 py-2.5 rounded-xl shadow transition">
+                        احجز جلستك الآن
+                    </button>
+                </div>
             </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1">الوقت *</label>
-              <input type="time" id="bookingTime" required
-                class="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none shadow-sm">
+
+            <div class="pt-6 border-t border-slate-800 text-center text-xs text-slate-600">
+                &copy; 2026 جميع الحقوق محفوظة لـ ريلاكس سبا منزلي - المملكة العربية السعودية.
             </div>
-          </div>
-          <p id="scheduleError" class="text-[10px] text-rose-500 hidden"></p>
-
-          <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">ملاحظات إضافية للمعالج</label>
-            <textarea id="notes" rows="2" placeholder="أي تفضيلات أو ملاحظات إضافية..."
-              class="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-800 focus:border-blue-500 focus:outline-none shadow-sm"></textarea>
-          </div>
-
-          <div class="app-card rounded-2xl p-4 text-xs space-y-2 border-slate-200">
-            <h4 class="font-bold text-blue-700 pb-1 border-b border-slate-100">ملخص الطلب والموقع</h4>
-            <div class="flex justify-between text-slate-600"><span>اسم العميل:</span><span id="summaryName" class="text-slate-900 font-medium">--</span></div>
-            <div class="flex justify-between text-slate-600"><span>رقم الجوال:</span><span id="summaryPhone" class="text-slate-900 font-medium" dir="ltr">--</span></div>
-            <div class="flex justify-between text-slate-600"><span>العنوان المحدد:</span><span id="summaryAddress" class="text-blue-800 font-medium text-left max-w-[200px] truncate">--</span></div>
-            <div class="flex justify-between text-slate-600"><span>الخدمة المختارة:</span><span id="summaryService" class="text-slate-900 font-medium">--</span></div>
-            <div class="flex justify-between text-slate-600"><span>عدد الأشخاص:</span><span id="summaryPeople" class="text-slate-900">1</span></div>
-            <div class="flex justify-between text-slate-700 border-t border-slate-100 pt-2 text-sm font-bold"><span>المبلغ الإجمالي:</span><span id="summaryTotal" class="text-blue-600">0 ر.س</span></div>
-          </div>
         </div>
+    </footer>
 
-        <button onclick="startProcessingAndShowLoading()" id="submitBtn" class="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-3.5 rounded-xl shadow-md text-xs">
-          تأكيد الطلب وحفظ البيانات <i class="fa-solid fa-arrow-left mr-2"></i>
-        </button>
-      </div>
+    <!-- Leaflet JS & Logic -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        /* ================= Config ================= */
+        // Served by Express on :5000 -> same origin. Live Server / file:// -> localhost:5000.
+        const isLocal = ['localhost', '127.0.0.1', ''].includes(location.hostname);
+        const API_URL = (location.protocol === 'file:' || (isLocal && location.port !== '5000')) ? 'http://localhost:5000' : '';
+        const SESSION_KEY = 'spa_user_session';
+        const SYNC_INTERVAL_MS = 10000;
 
-      <!-- LOADING -->
-      <div id="loadingScreen" class="hidden flex-col items-center justify-center min-h-[400px] px-6 text-center space-y-6">
-        <div class="relative w-20 h-20 flex items-center justify-center">
-          <div class="absolute inset-0 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-          <i class="fa-solid fa-user-gear text-blue-600 text-2xl animate-pulse"></i>
-        </div>
-        <div class="space-y-2">
-          <h3 class="text-xl font-extrabold text-slate-800">تحميل...</h3>
-          <p class="text-xs text-blue-600 font-medium">يتم العمل على حسابك الشخصي</p>
-        </div>
-        <div class="w-48 bg-slate-200 rounded-full h-1.5 overflow-hidden border border-slate-300">
-          <div class="bg-blue-600 h-full w-full animate-pulse"></div>
-        </div>
-      </div>
+        const serviceImages = [
+            'https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?auto=format&fit=crop&q=80&w=600',
+            'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&q=80&w=600',
+            'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&q=80&w=600'
+        ];
+        const serviceBadges = [
+            { text: 'الأكثر طلباً 🌟', cls: 'bg-amber-500 text-white' },
+            { text: 'علاجي عميق 💪', cls: 'bg-emeraldDark text-emerald-200' },
+            { text: 'استرخاء دافئ 🔥', cls: 'bg-orange-600 text-white' }
+        ];
+        const STATUS_LABELS = {
+            pending: 'قيد الانتظار ⏳',
+            assigned: 'تم التعيين ✅',
+            on_the_way: 'في الطريق 🚗',
+            arrived: 'وصل الفريق 📍',
+            in_progress: 'قيد التنفيذ 💆',
+            completed: 'مكتمل ✅',
+            cancelled: 'ملغى ❌'
+        };
 
-      <!-- STEP 4: VERIFY PIN -->
-      <div id="stepVerify" class="hidden px-5 pt-3 pb-12 space-y-4">
-        <div class="text-center space-y-1">
-          <div class="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto text-lg shadow-sm">
-            <i class="fa-solid fa-shield-halved"></i>
-          </div>
-          <h3 class="text-base font-bold text-slate-800">صفحة الأمان والرمز السري</h3>
-          <p class="text-[11px] text-slate-500">قم بإنشاء وتأكيد رمز الأمان الخاص برقمك للحماية</p>
-        </div>
+        const $ = id => document.getElementById(id);
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-        <div class="app-card rounded-2xl p-3.5 border-amber-200 space-y-3">
-          <div>
-            <label class="block text-[10px] font-semibold text-slate-500 mb-1">اسم العميل المسجل (غير قابل للتعديل)</label>
-            <div class="w-full bg-slate-100 border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-700 flex items-center justify-between cursor-not-allowed">
-              <span id="verifyNameReadonly">--</span>
-              <i class="fa-solid fa-lock text-amber-500 text-xs"></i>
-            </div>
-          </div>
-          <div>
-            <label class="block text-[11px] font-bold text-amber-700 mb-1">أدخل الرقم السري (4 أرقام) *</label>
-            <input type="password" id="pinInput1" maxlength="4" inputmode="numeric" placeholder="••••"
-              class="w-full bg-white border border-amber-300 rounded-xl p-2 text-center text-base font-bold text-amber-800 tracking-widest focus:border-amber-500 focus:outline-none pin-input shadow-sm">
-          </div>
-          <div>
-            <label class="block text-[11px] font-bold text-amber-700 mb-1">تأكيد الرقم السري *</label>
-            <input type="password" id="pinInput2" maxlength="4" inputmode="numeric" placeholder="••••"
-              class="w-full bg-white border border-amber-300 rounded-xl p-2 text-center text-base font-bold text-amber-800 tracking-widest focus:border-amber-500 focus:outline-none pin-input shadow-sm">
-          </div>
-          <p id="pinMatchError" class="text-[10px] text-rose-500 text-center hidden font-bold">الرقم السري غير متطابق، يرجى إعادة التأكيد</p>
-        </div>
+        /* ================= State ================= */
+        let loadedServices = [], loadError = '';
+        let peopleCount = 1;
+        let clientInfo = {};
+        let createdBookingId = null;
+        let localBookingsList = [], userNotifications = [], unreadCount = 0;
+        let map = null, marker = null, currentCoords = { lat: 21.5433, lng: 39.1728 };
+        let currentStep = 1, currentTab = 'home';
+        let syncing = false, submitting = false;
 
-        <button onclick="savePinAndComplete()" id="saveBtn" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-3.5 rounded-xl shadow-md text-xs disabled:opacity-60">
-          تأكيد الرقم السري والدخول للصفحة الشخصية <i class="fa-solid fa-right-to-bracket mr-2"></i>
-        </button>
-      </div>
+        /* ================= Helpers ================= */
+        function pad(n) { return String(n).padStart(2, '0'); }
+        function localISODate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+        function fmtDate(iso) { const [y, m, d] = String(iso).split('-'); return `${d}/${m}/${y}`; }
+        function getService(id) { return loadedServices.find(s => String(s.id) === String(id)); }
 
-      <!-- PAGE: HOME -->
-      <div id="pageHome" class="hidden space-y-4">
-        <div class="px-5 pt-3 flex justify-between items-center">
-          <div>
-            <div class="text-lg font-extrabold text-slate-800 flex items-center gap-2">
-              <span id="welcomeUserName">مرحباً</span>
-              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">حساب موثق</span>
-            </div>
-            <p class="text-[11px] text-slate-500 mt-0.5">أهلاً بك في ملفك الشخصي لإدارة الجلسات والمواعيد</p>
-          </div>
-          <button onclick="logoutAccount()" class="w-9 h-9 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 hover:bg-rose-100 transition" title="تسجيل الخروج">
-            <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
-          </button>
-        </div>
-
-        <div class="mx-5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center space-x-3 space-x-reverse">
-          <i class="fa-solid fa-circle-check text-emerald-600 text-lg"></i>
-          <div>
-            <p class="text-xs text-emerald-800 font-bold">تم حفظ الحساب وتأكيد طلبك بنجاح!</p>
-            <p class="text-[10px] text-emerald-600" id="confirmedBookingIdText">رقم الحجز: --</p>
-          </div>
-        </div>
-
-        <div class="mx-5 h-40 rounded-2xl hero-bg border border-slate-200 relative overflow-hidden flex flex-col justify-end p-4 shadow-md">
-          <div class="relative z-10 text-center space-y-1">
-            <h2 class="text-xl font-extrabold text-white font-serif drop-shadow-md">Relax & Spa Saudi</h2>
-            <p class="text-[10px] text-blue-100 uppercase tracking-widest font-light drop-shadow">راحة وفخامة .. حتى باب بيتك</p>
-          </div>
-        </div>
-
-        <div class="px-5 space-y-2.5 pt-1">
-          <div onclick="resetAndBookNew()" class="app-card-btn rounded-2xl p-3.5 flex items-center justify-between cursor-pointer">
-            <div class="flex items-center space-x-3 space-x-reverse">
-              <div class="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 text-base"><i class="fa-solid fa-plus"></i></div>
-              <div>
-                <h3 class="text-xs font-bold text-slate-800">حجز جلسة مساج جديدة</h3>
-                <p class="text-[10px] text-slate-500">اختر موعداً جديداً وموقع خدمة جديد</p>
-              </div>
-            </div>
-            <i class="fa-solid fa-chevron-left text-slate-400 text-xs"></i>
-          </div>
-
-          <div onclick="showPage('pageAppointments')" class="app-card-btn rounded-2xl p-3.5 flex items-center justify-between cursor-pointer">
-            <div class="flex items-center space-x-3 space-x-reverse">
-              <div class="w-9 h-9 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600 text-base"><i class="fa-solid fa-calendar-check"></i></div>
-              <div>
-                <h3 class="text-xs font-bold text-slate-800">مواعيدي والجلسات القادمة</h3>
-                <p class="text-[10px] text-slate-500">متابعة تفاصيل المواعيد والمواقع</p>
-              </div>
-            </div>
-            <i class="fa-solid fa-chevron-left text-slate-400 text-xs"></i>
-          </div>
-        </div>
-      </div>
-
-      <!-- PAGE: APPOINTMENTS -->
-      <div id="pageAppointments" class="hidden px-5 pt-4 space-y-4">
-        <div class="flex items-center justify-between pb-2 border-b border-slate-200">
-          <button onclick="showPage('pageHome')" class="w-8 h-8 rounded-full bg-slate-200/80 border border-slate-300 flex items-center justify-center text-slate-700"><i class="fa-solid fa-arrow-right"></i></button>
-          <h3 class="text-base font-bold text-slate-800">مواعيدي القادمة</h3>
-          <div class="w-8"></div>
-        </div>
-        <div id="upcomingList" class="space-y-3"></div>
-      </div>
-
-      <!-- PAGE: NOTIFICATIONS -->
-      <div id="pageNotifications" class="hidden px-5 pt-4 space-y-4">
-        <div class="flex items-center justify-between pb-2 border-b border-slate-200">
-          <button onclick="showPage('pageHome')" class="w-8 h-8 rounded-full bg-slate-200/80 border border-slate-300 flex items-center justify-center text-slate-700"><i class="fa-solid fa-arrow-right"></i></button>
-          <h3 class="text-base font-bold text-slate-800">الإشعارات والتنبيهات</h3>
-          <button onclick="clearNotifications()" class="text-[10px] text-rose-500 font-bold">مسح الكل</button>
-        </div>
-        <div id="notificationsList" class="space-y-3"></div>
-      </div>
-    </div>
-
-    <!-- Bottom Nav Bar -->
-    <div id="bottomNav" class="hidden absolute bottom-0 left-0 right-0 h-16 bg-white/95 border-t border-slate-200 backdrop-blur-md px-6 flex justify-between items-center z-40 text-xs">
-      <button onclick="showPage('pageHome')" data-page="pageHome" class="nav-btn flex flex-col items-center gap-1 text-blue-600 font-bold">
-        <i class="fa-solid fa-house text-base"></i><span>الرئيسية</span>
-      </button>
-      <button onclick="showPage('pageAppointments')" data-page="pageAppointments" class="nav-btn flex flex-col items-center gap-1 text-slate-400 hover:text-blue-600">
-        <i class="fa-solid fa-calendar-days text-base"></i><span>مواعيدي</span>
-      </button>
-      <button onclick="showPage('pageNotifications')" data-page="pageNotifications" class="nav-btn flex flex-col items-center gap-1 text-slate-400 hover:text-blue-600 relative">
-        <i class="fa-solid fa-bell text-base"></i><span>الإشعارات</span>
-        <span id="notifBadge" class="hidden absolute -top-1.5 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center border-2 border-white shadow-sm">0</span>
-      </button>
-    </div>
-  </div>
-
-  <script>
-    /* ---------- Config ---------- */
-    // Served by Express on :5000 -> same origin. Live Server / file:// -> localhost:5000.
-    const isLocal = ['localhost', '127.0.0.1', ''].includes(location.hostname);
-    const API_URL = (location.protocol === 'file:' || (isLocal && location.port !== '5000')) ? 'http://localhost:5000' : '';
-    const SESSION_KEY = 'spa_user_session';
-    const SYNC_INTERVAL_MS = 10000;
-    const serviceImages = [
-      'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=400&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?q=80&w=400&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?q=80&w=400&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=400&auto=format&fit=crop'
-    ];
-    const STATUS_LABELS = {
-      pending: 'قيد الانتظار ⏳',
-      assigned: 'تم التعيين ✅',
-      on_the_way: 'في الطريق 🚗',
-      arrived: 'وصل الفريق 📍',
-      in_progress: 'قيد التنفيذ 💆',
-      completed: 'مكتمل ✅',
-      cancelled: 'ملغى ❌'
-    };
-    const ALL_VIEWS = ['stepInfo','stepPackages','stepSchedule','loadingScreen','stepVerify','pageHome','pageAppointments','pageNotifications'];
-    const $ = id => document.getElementById(id);
-    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-    /* ---------- State ---------- */
-    let loadedServices = [], selectedService = null, loadError = '';
-    let peopleCount = 1, createdBookingId = null, clientInfo = {};
-    let localBookingsList = [], userNotifications = [], unreadCount = 0;
-    let map = null, marker = null, currentCoords = { lat: 21.5433, lng: 39.1728 };
-    let syncing = false;
-
-    /* ---------- Services from DB ---------- */
-    async function loadServices() {
-      try {
-        const res = await fetch(`${API_URL}/api/services`);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        loadedServices = (await res.json()).map((s, i) => ({
-          id: s.id, title: s.title, duration_minutes: s.duration_minutes, price: Number(s.price),
-          desc: s.description || '', image: serviceImages[i % serviceImages.length]
-        }));
-        selectedService = loadedServices[0] || null;
-        loadError = loadedServices.length ? '' : 'جدول الخدمات فارغ في قاعدة البيانات';
-      } catch (e) {
-        console.error(e);
-        loadError = 'تعذر تحميل الخدمات — ' + e.message;
-      }
-    }
-    async function retryServices() { await loadServices(); renderPackages(); }
-
-    function renderPackages() {
-      const sel = id => selectedService && selectedService.id === id;
-      $('packagesList').innerHTML = loadedServices.map(pkg => `
-        <div onclick="selectPkg(${pkg.id})" class="pkg-card rounded-2xl p-3 cursor-pointer flex gap-3 items-center ${sel(pkg.id) ? 'selected' : ''}">
-          <div class="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 relative border border-slate-200">
-            <img src="${pkg.image}" alt="${esc(pkg.title)}" class="w-full h-full object-cover">
-            <span class="absolute bottom-0.5 right-0.5 bg-black/60 text-[8px] text-white px-1 rounded">${pkg.duration_minutes} د</span>
-          </div>
-          <div class="flex-1 space-y-1">
-            <div class="flex justify-between items-start">
-              <h4 class="text-xs font-bold text-slate-800 leading-tight">${esc(pkg.title)}</h4>
-              <i class="fa-solid ${sel(pkg.id) ? 'fa-circle-check text-blue-600' : 'fa-circle text-slate-300'} text-xs ml-1"></i>
-            </div>
-            <p class="text-[10px] text-slate-500 line-clamp-2">${esc(pkg.desc)}</p>
-            <div class="pt-0.5"><span class="text-xs font-extrabold text-blue-600">${pkg.price}</span> <span class="text-[9px] text-slate-500">ر.س</span></div>
-          </div>
-        </div>`).join('') || `
-        <div class="text-center py-8 space-y-3">
-          <p class="text-xs text-rose-500">${esc(loadError || 'لا توجد خدمات متاحة')}</p>
-          <button onclick="retryServices()" class="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl">إعادة المحاولة</button>
-        </div>`;
-    }
-    function selectPkg(id) { selectedService = loadedServices.find(p => p.id === id); renderPackages(); }
-    function changePeople(v) { peopleCount = Math.max(1, peopleCount + v); $('peopleCountVal').innerText = peopleCount; }
-
-    /* ---------- Map ---------- */
-    function initMap() {
-      if (map) { setTimeout(() => map.invalidateSize(), 200); return; }
-      map = L.map('mapContainer').setView([currentCoords.lat, currentCoords.lng], 12);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
-      marker = L.marker([currentCoords.lat, currentCoords.lng], { draggable: true }).addTo(map);
-      const set = (lat, lng) => { currentCoords = { lat, lng }; reverseGeocode(lat, lng); };
-      marker.on('dragend', () => { const p = marker.getLatLng(); set(p.lat, p.lng); });
-      map.on('click', e => { marker.setLatLng(e.latlng); set(e.latlng.lat, e.latlng.lng); });
-      setTimeout(() => map.invalidateSize(), 300);
-    }
-
-    function locateUserGPS() {
-      const st = $('geoStatusText');
-      st.classList.remove('hidden');
-      if (!navigator.geolocation) { alert('خاصية تحديد الموقع غير مدعومة في متصفحك'); st.classList.add('hidden'); return; }
-      navigator.geolocation.getCurrentPosition(pos => {
-        currentCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        if (map && marker) { map.setView([currentCoords.lat, currentCoords.lng], 15); marker.setLatLng([currentCoords.lat, currentCoords.lng]); }
-        reverseGeocode(currentCoords.lat, currentCoords.lng);
-      }, () => {
-        st.classList.add('hidden');
-        alert('تعذر تحديد موقعك تلقائياً. يمكنك الضغط على أي نقطة في الخريطة لتحديد الموقع.');
-      }, { enableHighAccuracy: true, timeout: 10000 });
-    }
-
-    async function reverseGeocode(lat, lng) {
-      const st = $('geoStatusText');
-      st.classList.remove('hidden');
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=ar`);
-        const a = (await res.json()).address || {};
-        const city = a.city || a.town || a.state;
-        const district = a.suburb || a.neighbourhood || a.residential;
-        if (city) $('cityName').value = city;
-        if (district) $('districtName').value = district;
-      } catch (e) { console.warn('Geocoding error:', e); }
-      finally { st.classList.add('hidden'); }
-    }
-
-    /* ---------- Helpers ---------- */
-    function normalizePhone(raw) {
-      let p = raw.replace(/[\s\-()]/g, '').replace(/^(\+966|00966)/, '0');
-      if (/^5\d{8}$/.test(p)) p = '0' + p;
-      return /^05\d{8}$/.test(p) ? p : null;
-    }
-
-    function updateProgressUI(n) {
-      $('stepIndicator').innerText = `${n}/4`;
-      $('progressStepper').classList.remove('hidden');
-      for (let i = 1; i <= 4; i++) {
-        const c = $(`circleStep${i}`);
-        c.className = 'step-circle ' + (i < n ? 'completed' : i === n ? 'active' : 'inactive');
-        c.innerHTML = i < n ? '✓' : i;
-      }
-      for (let i = 1; i <= 3; i++) $(`lineStep${i}`).className = 'step-line' + (i < n ? ' active' : '');
-    }
-
-    function displayOnly(id) {
-      ALL_VIEWS.forEach(v => { const el = $(v); el.classList.add('hidden'); el.style.display = 'none'; });
-      const t = $(id);
-      t.classList.remove('hidden');
-      t.style.display = id === 'loadingScreen' ? 'flex' : 'block';
-      $('mainContent').scrollTop = 0;
-    }
-    function showStep(id) { displayOnly(id); $('bottomNav').classList.add('hidden'); }
-
-    function showPage(id) {
-      displayOnly(id);
-      $('progressStepper').classList.add('hidden');
-      $('stepIndicator').innerText = '';
-      $('bottomNav').classList.remove('hidden');
-      document.querySelectorAll('.nav-btn').forEach(b => {
-        const on = b.dataset.page === id;
-        b.classList.toggle('text-blue-600', on); b.classList.toggle('font-bold', on); b.classList.toggle('text-slate-400', !on);
-      });
-      if (id === 'pageAppointments') renderAppointments();
-      if (id === 'pageNotifications') renderNotifications();
-      updateNotificationBadgeUI();
-      syncFromServer(); // refresh right away when the client opens any page
-    }
-
-    /* ---------- Flow ---------- */
-    function goToStepInfo() { showStep('stepInfo'); updateProgressUI(1); setTimeout(initMap, 150); }
-
-    async function goToStepPackages() {
-      const v = id => $(id).value.trim();
-      const name = v('fullName'), phone = v('phone'), city = v('cityName'), district = v('districtName'), street = v('streetName'), houseNo = v('houseNo');
-
-      if (!name || !phone || !city || !district || !street || !houseNo) {
-        alert('الرجاء تعبئة كافة الحقول المطلوبة (الاسم، الجوال، المدينة، الحي، اسم الشارع، ورقم المنزل)');
-        return;
-      }
-      const norm = normalizePhone(phone);
-      $('phoneError').classList.toggle('hidden', !!norm);
-      if (!norm) return;
-
-      clientInfo = { name, phone: norm, city, district, street, houseNo,
-        fullAddress: `${city}، حي ${district}، شارع ${street}، منزل/شقة ${houseNo}` };
-
-      showStep('stepPackages'); updateProgressUI(2);
-      if (!loadedServices.length) await loadServices();
-      renderPackages();
-    }
-
-    function backToPackages() { showStep('stepPackages'); updateProgressUI(2); renderPackages(); }
-
-    function goToStepSchedule() {
-      if (!selectedService) { alert('الرجاء اختيار خدمة أولاً'); return; }
-      $('summaryName').innerText = clientInfo.name;
-      $('summaryPhone').innerText = clientInfo.phone;
-      $('summaryAddress').innerText = clientInfo.fullAddress;
-      $('summaryService').innerText = selectedService.title;
-      $('summaryPeople').innerText = `${peopleCount} شخص`;
-      $('summaryTotal').innerText = `${selectedService.price * peopleCount} ر.س`;
-      showStep('stepSchedule'); updateProgressUI(3);
-    }
-
-    function startProcessingAndShowLoading() {
-      const err = $('scheduleError');
-      const fail = m => { err.innerText = m; err.classList.remove('hidden'); };
-      const d = parseInt($('bookingDay').value, 10), m = parseInt($('bookingMonth').value, 10), t = $('bookingTime').value;
-
-      if (!d || !m || !t) return fail('يرجى كتابة اليوم والشهر والوقت للحجز بشكل صحيح');
-      const dt = new Date(2026, m - 1, d);
-      if (dt.getMonth() !== m - 1 || dt.getDate() !== d) return fail('التاريخ غير صحيح (مثال: 31/02 غير موجود)');
-      const [hh, mm] = t.split(':').map(Number);
-      dt.setHours(hh, mm);
-      if (dt < new Date()) return fail('يرجى اختيار موعد في المستقبل');
-      err.classList.add('hidden');
-
-      clientInfo.bookingDateISO = `2026-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      clientInfo.bookingDate = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/2026`;
-      clientInfo.bookingTime = t;
-
-      showStep('loadingScreen');
-      setTimeout(goToStepVerify, 2500);
-    }
-
-    function goToStepVerify() {
-      $('verifyNameReadonly').innerText = clientInfo.name;
-      $('pinInput1').value = ''; $('pinInput2').value = '';
-      $('pinMatchError').classList.add('hidden');
-      showStep('stepVerify'); updateProgressUI(4);
-    }
-
-    /* ---------- Save to database ---------- */
-    async function savePinAndComplete() {
-      const pin1 = $('pinInput1').value.trim(), pin2 = $('pinInput2').value.trim();
-      if (!/^\d{4}$/.test(pin1)) { alert('يرجى إدخال رقم سري مكون من 4 أرقام'); return; }
-      if (pin1 !== pin2) { $('pinMatchError').classList.remove('hidden'); return; }
-      $('pinMatchError').classList.add('hidden');
-
-      const mapsLink = `https://maps.google.com/?q=${currentCoords.lat},${currentCoords.lng}`;
-      const payload = {
-        full_name: clientInfo.name,
-        phone: clientInfo.phone,
-        service_id: selectedService.id,
-        people_count: peopleCount,
-        booking_date: clientInfo.bookingDateISO,
-        booking_time: clientInfo.bookingTime,
-        location_address: `${clientInfo.fullAddress} | ${mapsLink}`,
-        notes: $('notes').value.trim()
-      };
-
-      const btn = $('saveBtn'); btn.disabled = true;
-      let fullId = '';
-      try {
-        const res = await fetch(`${API_URL}/api/bookings`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) throw new Error(data.error || 'HTTP ' + res.status);
-        // Keep the FULL UUID: the server sync endpoint needs it to find notifications.
-        fullId = String(data.booking.id);
-        createdBookingId = fullId.slice(0, 8).toUpperCase();
-      } catch (e) {
-        console.error(e);
-        alert('تعذر حفظ الحجز في قاعدة البيانات: ' + e.message);
-        btn.disabled = false;
-        return;
-      }
-      btn.disabled = false;
-
-      localBookingsList.unshift({
-        id: createdBookingId, fullId, service_title: selectedService.title,
-        booking_date: clientInfo.bookingDate, booking_time: clientInfo.bookingTime,
-        people_count: peopleCount, address: clientInfo.fullAddress,
-        total_price: selectedService.price * peopleCount, status: 'pending', payment_status: 'unpaid'
-      });
-      userNotifications.unshift({
-        id: Date.now(),
-        title: 'أهلاً بك في تطبيق Relax & Spa! 🪷',
-        message: `تم استلام طلب حجزك برقم #${createdBookingId} بنجاح. ستشاهد هنا في هذه الخانة جميع التحديثات القادمة (مثل تعيين المعالجة والسائق وحالة الجلسة والدفع).`,
-        date: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
-      });
-      unreadCount++;
-      saveSessionToStorage();
-      renderProfilePage();
-    }
-
-    /* ---------- Server sync (status + admin notifications) ---------- */
-    async function syncFromServer() {
-      if (syncing) return;
-      const ids = localBookingsList.map(b => b.fullId).filter(Boolean);
-      if (!ids.length) return;
-      syncing = true;
-      try {
-        const res = await fetch(`${API_URL}/api/client/sync`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids })
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.success) return;
-
-        let changed = false;
-
-        // 1) update booking status / payment
-        (data.bookings || []).forEach(sb => {
-          const lb = localBookingsList.find(b => b.fullId === sb.id);
-          if (lb && (lb.status !== sb.status || lb.payment_status !== sb.payment_status)) {
-            lb.status = sb.status;
-            lb.payment_status = sb.payment_status;
-            changed = true;
-          }
-        });
-
-        // 2) add only the notifications we have not seen yet (oldest first)
-        const known = new Set(userNotifications.map(n => n.serverId).filter(Boolean));
-        const fresh = (data.notifications || []).filter(n => !known.has(n.id));
-        fresh.reverse().forEach(n => {
-          userNotifications.unshift({
-            id: Date.now() + n.id,
-            serverId: n.id,
-            title: n.title,
-            message: n.message,
-            date: new Date(n.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
-          });
-          unreadCount++;
-          changed = true;
-        });
-
-        if (changed) {
-          saveSessionToStorage();
-          updateNotificationBadgeUI();
-          if (!$('pageNotifications').classList.contains('hidden')) renderNotifications();
-          if (!$('pageAppointments').classList.contains('hidden')) renderAppointments();
+        function normalizePhone(raw) {
+            let p = String(raw).replace(/[\s\-()]/g, '').replace(/^(\+966|00966)/, '0');
+            if (/^5\d{8}$/.test(p)) p = '0' + p;
+            return /^05\d{8}$/.test(p) ? p : null;
         }
-      } catch (e) {
-        console.warn('sync failed', e);
-      } finally {
-        syncing = false;
-      }
-    }
 
-    /* ---------- Session ---------- */
-    function saveSessionToStorage() {
-      try {
-        localStorage.setItem(SESSION_KEY, JSON.stringify({
-          isLoggedIn: true, clientInfo, lastBookingId: createdBookingId,
-          bookingsList: localBookingsList, notifications: userNotifications, unreadCount
-        }));
-      } catch (e) { console.warn('localStorage save failed:', e); }
-    }
+        function showToast(message, type = 'info') {
+            const container = $('toastContainer');
+            const toast = document.createElement('div');
+            let bgClass = 'bg-slate-900 text-white';
+            let icon = 'fa-circle-info text-amber-400';
+            if (type === 'success') { bgClass = 'bg-emeraldDark text-white border border-emerald-500'; icon = 'fa-circle-check text-emerald-300'; }
+            else if (type === 'error') { bgClass = 'bg-rose-900 text-white border border-rose-600'; icon = 'fa-circle-exclamation text-rose-300'; }
 
-    function checkPersistedSession() {
-      try {
-        const p = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-        if (p && p.isLoggedIn) {
-          clientInfo = p.clientInfo || {};
-          createdBookingId = p.lastBookingId || null;
-          localBookingsList = p.bookingsList || [];
-          userNotifications = p.notifications || [];
-          unreadCount = typeof p.unreadCount !== 'undefined' ? p.unreadCount : userNotifications.length;
-          updateNotificationBadgeUI();
-          return true;
+            toast.className = `${bgClass} p-4 rounded-2xl shadow-xl flex items-center gap-3 text-xs font-bold transition-all duration-300 transform translate-x-full pointer-events-auto`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i><span class="flex-1">${esc(message)}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.remove('translate-x-full'), 50);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
         }
-      } catch (e) { console.warn('Session check failed:', e); }
-      return false;
-    }
 
-    function updateNotificationBadgeUI() {
-      const b = $('notifBadge');
-      b.innerText = unreadCount;
-      b.classList.toggle('hidden', unreadCount <= 0);
-    }
+        /* ================= Services from the database ================= */
+        async function loadServices() {
+            try {
+                const res = await fetch(`${API_URL}/api/services`);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                loadedServices = (await res.json()).map(s => ({
+                    id: s.id, title: s.title, duration_minutes: s.duration_minutes, price: Number(s.price),
+                    desc: s.description || ''
+                }));
+                loadError = loadedServices.length ? '' : 'جدول الخدمات فارغ في قاعدة البيانات';
+            } catch (e) {
+                console.error(e);
+                loadError = 'تعذر تحميل الخدمات — ' + e.message;
+            }
+        }
 
-    function renderProfilePage() {
-      $('welcomeUserName').innerText = `مرحباً ${clientInfo.name ? clientInfo.name.split(' ')[0] : ''}`;
-      $('confirmedBookingIdText').innerText = `رقم الحجز التأكيدي: #${createdBookingId || '--'}`;
-      showPage('pageHome');
-    }
+        async function retryServices() {
+            $('servicesGrid').innerHTML = '<div class="md:col-span-3 text-center text-slate-400 text-sm py-10"><i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري تحميل الخدمات...</div>';
+            await loadServices();
+            renderServices();
+        }
 
-    function logoutAccount() {
-      if (!confirm('هل تريد تسجيل الخروج وبدء حجز جديد؟')) return;
-      try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
-      clientInfo = {}; localBookingsList = []; userNotifications = []; unreadCount = 0; createdBookingId = null;
-      resetAndBookNew();
-    }
+        function renderServices() {
+            const grid = $('servicesGrid');
+            const calc = $('calcService');
+            const modalSel = $('modalService');
+            const prevCalc = calc.value, prevModal = modalSel.value;
 
-    function resetAndBookNew() {
-      ['bookingDay','bookingMonth','bookingTime','notes','pinInput1','pinInput2'].forEach(id => $(id).value = '');
-      $('scheduleError').classList.add('hidden');
-      $('fullName').value = clientInfo.name || '';
-      $('phone').value = clientInfo.phone || '';
-      $('cityName').value = clientInfo.city || '';
-      $('districtName').value = clientInfo.district || '';
-      $('streetName').value = clientInfo.street || '';
-      $('houseNo').value = clientInfo.houseNo || '';
-      goToStepInfo();
-    }
+            if (!loadedServices.length) {
+                grid.innerHTML = `
+                    <div class="md:col-span-3 text-center py-10 space-y-3">
+                        <p class="text-sm text-rose-500 font-bold">${esc(loadError || 'لا توجد خدمات متاحة')}</p>
+                        <button onclick="retryServices()" class="px-5 py-2.5 bg-sunset-gradient text-white text-xs font-bold rounded-xl">إعادة المحاولة</button>
+                    </div>`;
+                calc.innerHTML = '<option value="">لا توجد خدمات</option>';
+                modalSel.innerHTML = '<option value="">لا توجد خدمات</option>';
+                calculateTotal();
+                return;
+            }
 
-    /* ---------- Lists ---------- */
-    function renderAppointments() {
-      checkPersistedSession();
-      $('upcomingList').innerHTML = localBookingsList.map(item => {
-        const label = STATUS_LABELS[item.status] || 'نشط ⏳';
-        const badge = item.status === 'completed' ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-                    : item.status === 'cancelled' ? 'bg-rose-100 text-rose-700 border-rose-300'
-                    : item.status === 'pending' ? 'bg-amber-100 text-amber-700 border-amber-300'
-                    : 'bg-blue-100 text-blue-700 border-blue-300';
-        const payLabel = item.payment_status === 'paid' ? 'مدفوع ✅' : item.payment_status === 'refunded' ? 'مسترجع ↩️' : 'غير مدفوع';
-        return `
-        <div class="app-card rounded-2xl p-3.5 border-slate-200 space-y-2">
-          <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-            <span class="text-xs font-bold text-blue-600">حجز مؤكد #${esc(item.id)}</span>
-            <span class="text-[9px] px-2 py-0.5 rounded-full border ${badge}">${esc(label)}</span>
-          </div>
-          <h4 class="text-xs font-bold text-slate-800">${esc(item.service_title)}</h4>
-          <div class="text-[10px] text-slate-600 flex items-center gap-1">
-            <i class="fa-solid fa-location-dot text-blue-600"></i><span class="truncate">${esc(item.address)}</span>
-          </div>
-          <div class="flex justify-between text-[11px] text-slate-500">
-            <span><i class="fa-regular fa-calendar ml-1 text-blue-600"></i>${esc(item.booking_date)}</span>
-            <span><i class="fa-regular fa-clock ml-1 text-blue-600"></i>${esc(item.booking_time)}</span>
-          </div>
-          <div class="flex justify-between items-center pt-1.5 border-t border-slate-100 text-xs">
-            <span class="text-slate-500 text-[10px]">الأشخاص: ${esc(item.people_count)} • ${esc(payLabel)}</span>
-            <span class="font-bold text-blue-600">${esc(item.total_price)} ر.س</span>
-          </div>
-        </div>`;
-      }).join('') || '<div class="text-center py-10 text-slate-400 text-xs">لا توجد مواعيد متاحة حالياً</div>';
-    }
+            grid.innerHTML = loadedServices.map((s, i) => {
+                const badge = serviceBadges[i % serviceBadges.length];
+                const img = serviceImages[i % serviceImages.length];
+                const desc = s.desc || 'جلسة مساج احترافية في منزلك بكامل التجهيزات الفندقية والزيوت الطبيعية.';
+                return `
+                <div class="bg-white rounded-3xl border-2 border-amber-200/70 shadow-lg hover:shadow-2xl hover:border-amber-400 transition-all duration-300 flex flex-col overflow-hidden group">
+                    <div class="relative h-56 overflow-hidden bg-amber-50">
+                        <img src="${img}" alt="${esc(s.title)}" class="w-full h-full object-cover group-hover:scale-110 transition duration-700">
+                        <div class="absolute top-4 right-4 ${badge.cls} text-xs font-black px-3.5 py-1.5 rounded-full shadow-md">${badge.text}</div>
+                    </div>
+                    <div class="p-6 flex-1 flex flex-col justify-between space-y-6">
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-extrabold text-xl text-slate-900">${esc(s.title)}</h4>
+                                <div class="text-left">
+                                    <span class="text-sunset-500 font-black text-2xl">${esc(s.price)}</span>
+                                    <span class="text-xs font-bold text-slate-500">ر.س</span>
+                                </div>
+                            </div>
+                            <p class="text-slate-600 text-xs sm:text-sm leading-relaxed">${esc(desc)}</p>
+                        </div>
+                        <div class="pt-4 border-t border-amber-100 flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                                <i class="fa-regular fa-clock text-sunset-500 text-base"></i> ${esc(s.duration_minutes)} دقيقة
+                            </span>
+                            <button onclick="openBookingModalWithService('${esc(s.id)}')" class="bg-sunset-gradient text-white font-bold px-5 py-2.5 rounded-xl shadow-md hover:opacity-90 transition text-xs flex items-center gap-1">
+                                <span>احجز هذه الخدمة</span>
+                                <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
 
-    function renderNotifications() {
-      checkPersistedSession();
-      unreadCount = 0; saveSessionToStorage(); updateNotificationBadgeUI();
-      $('notificationsList').innerHTML = userNotifications.map(n => `
-        <div class="app-card rounded-2xl p-3.5 border-blue-100 bg-blue-50/40 space-y-1 shadow-sm">
-          <div class="flex justify-between items-center">
-            <h4 class="text-xs font-bold text-blue-800 flex items-center gap-1.5"><i class="fa-solid fa-bell text-blue-600"></i> ${esc(n.title)}</h4>
-            <span class="text-[9px] text-slate-400">${esc(n.date)}</span>
-          </div>
-          <p class="text-[11px] text-slate-600 leading-relaxed">${esc(n.message)}</p>
-        </div>`).join('') || '<div class="text-center py-10 text-slate-400 text-xs">لا توجد تنبيهات حالياً</div>';
-    }
+            calc.innerHTML = loadedServices.map(s =>
+                `<option value="${esc(s.id)}">${esc(s.title)} - ${esc(s.price)} ر.س (${esc(s.duration_minutes)} دقيقة)</option>`).join('');
+            modalSel.innerHTML = loadedServices.map(s =>
+                `<option value="${esc(s.id)}">${esc(s.title)} (${esc(s.price)} ر.س - ${esc(s.duration_minutes)} دقيقة)</option>`).join('');
 
-    function clearNotifications() {
-      userNotifications = []; unreadCount = 0;
-      saveSessionToStorage(); renderNotifications();
-    }
+            if (prevCalc && getService(prevCalc)) calc.value = prevCalc;
+            if (prevModal && getService(prevModal)) modalSel.value = prevModal;
+            calculateTotal();
+        }
 
-    window.addEventListener('storage', e => {
-      if (e.key === SESSION_KEY) {
-        checkPersistedSession();
-        if (!$('pageNotifications').classList.contains('hidden')) renderNotifications();
-      }
-    });
+        /* ================= Price calculator ================= */
+        function calculateTotal() {
+            const svc = getService($('calcService').value);
+            const basePrice = svc ? svc.price : 0;
+            const persons = parseInt($('calcPersons').value, 10);
 
-    // Runs immediately (no waiting for the network): a logged-in client lands straight on the
-    // personal page, even after a refresh, until they press logout.
-    (function init() {
-      if (checkPersistedSession()) {
-        renderProfilePage();
-        loadServices();                       // load services quietly in the background
-      } else {
-        resetAndBookNew();
-        loadServices().then(renderPackages);
-      }
-      // Poll the server for status changes + notifications sent from the admin panel
-      setInterval(syncFromServer, SYNC_INTERVAL_MS);
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) syncFromServer(); });
-      syncFromServer();
-    })();
-  </script>
+            $('personVal').innerText = `${persons} ${persons === 1 ? 'شخص' : 'أشخاص'}`;
+
+            let discountPercent = 0;
+            if (persons === 2) discountPercent = 0.10;
+            else if (persons === 3) discountPercent = 0.15;
+            else if (persons >= 4) discountPercent = 0.20;
+
+            const subtotal = basePrice * persons;
+            const discountAmount = Math.round(subtotal * discountPercent);
+            const finalTotal = subtotal - discountAmount;
+
+            $('basePrice').innerText = `${subtotal} ر.س`;
+            $('discountVal').innerText = `${discountAmount} ر.س`;
+            $('finalTotal').innerText = `${finalTotal} ر.س`;
+        }
+
+        function applyCalculatorBooking() {
+            const id = $('calcService').value;
+            if (!id) { showToast('اختر خدمة أولاً', 'error'); return; }
+            peopleCount = parseInt($('calcPersons').value, 10) || 1;
+            openBookingModal();
+            $('modalService').value = id;
+            $('peopleCountVal').innerText = peopleCount;
+            showToast('تم نقل خيارات الحاسبة إلى نموذج الحجز', 'info');
+        }
+
+        /* ================= Booking modal ================= */
+        function changePeople(v) {
+            peopleCount = Math.max(1, peopleCount + v);
+            $('peopleCountVal').innerText = peopleCount;
+        }
+
+        function openBookingModal() {
+            // Always start with an empty form (no old name / phone / address)
+            ['modalName', 'modalPhone', 'modalCity', 'modalDistrict', 'modalStreet', 'modalHouse', 'modalNotes', 'pinInput1', 'pinInput2']
+                .forEach(id => { $(id).value = ''; });
+            $('modalTime').value = 'now';
+            ['phoneError', 'locationError', 'scheduleError', 'pinError', 'modalServiceError'].forEach(id => $(id).classList.add('hidden'));
+
+            const today = localISODate(new Date());
+            $('modalDate').min = today;
+            if (!$('modalDate').value || $('modalDate').value < today) $('modalDate').value = today;
+
+            $('peopleCountVal').innerText = peopleCount;
+            $('modalFormContainer').classList.remove('hidden');
+            $('modalSuccess').classList.add('hidden');
+            $('bookingModal').classList.remove('hidden');
+            if (!loadedServices.length) retryServices();
+            goToStep(1);
+        }
+
+        function openBookingModalWithService(id) {
+            openBookingModal();
+            if (getService(id)) $('modalService').value = id;
+        }
+
+        function closeBookingModal() {
+            $('bookingModal').classList.add('hidden');
+        }
+
+        function goToStep(n) {
+            currentStep = n;
+            [1, 2, 3, 4].forEach(i => {
+                $(`step${i}`).classList.toggle('hidden', i !== n);
+                $(`stepBadge${i}`).className = i <= n ? 'text-sunset-500 font-bold' : 'text-slate-400 font-normal';
+            });
+            if (n === 2) initLeafletMap();
+            if (n === 3) fillSummary();
+            if (n === 4) {
+                $('verifyNameReadonly').innerText = $('modalName').value.trim();
+                $('pinInput1').value = ''; $('pinInput2').value = '';
+                $('pinError').classList.add('hidden');
+            }
+        }
+
+        function nextFromStep1() {
+            const name = $('modalName').value.trim();
+            const phone = $('modalPhone').value.trim();
+            const err = $('modalServiceError');
+            err.classList.add('hidden');
+
+            if (!getService($('modalService').value)) {
+                err.innerText = 'يرجى اختيار الخدمة';
+                err.classList.remove('hidden');
+                return;
+            }
+            if (!name || !phone) { showToast('يرجى كتابة الاسم ورقم الجوال للمتابعة', 'error'); return; }
+            const norm = normalizePhone(phone);
+            $('phoneError').classList.toggle('hidden', !!norm);
+            if (!norm) return;
+            goToStep(2);
+        }
+
+        function nextFromStep2() {
+            const ok = ['modalCity', 'modalDistrict', 'modalStreet', 'modalHouse'].every(id => $(id).value.trim());
+            $('locationError').classList.toggle('hidden', ok);
+            if (!ok) return;
+            goToStep(3);
+        }
+
+        function fullAddress() {
+            const v = id => $(id).value.trim();
+            return `${v('modalCity')}، حي ${v('modalDistrict')}، شارع ${v('modalStreet')}، منزل/شقة ${v('modalHouse')}`;
+        }
+
+        // The PIN is skipped only when the phone typed is the same one already registered on this device
+        function needsPin() {
+            return !(clientInfo.pinSet && clientInfo.phone && clientInfo.phone === normalizePhone($('modalPhone').value));
+        }
+
+        function fillSummary() {
+            const svc = getService($('modalService').value);
+            $('summaryServiceText').innerText = `- الجلسة المختارة: ${svc ? svc.title : '--'}`;
+            $('summaryPeopleText').innerText = `- عدد الأشخاص: ${peopleCount}`;
+            $('summaryLocationText').innerText = `- العنوان: ${fullAddress()}`;
+            $('summaryTotalText').innerText = `- المبلغ الإجمالي: ${svc ? svc.price * peopleCount : 0} ر.س`;
+            $('step3NextLabel').innerText = needsPin() ? 'التالي: الأمان والرمز السري' : 'تأكيد وإرسال الطلب';
+        }
+
+        // Works out the real date + time (HH:MM) the server expects
+        function resolveSchedule() {
+            const choice = $('modalTime').value;
+            if (choice === 'now') {
+                const d = new Date(Date.now() + 40 * 60000);
+                return { date: localISODate(d), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
+            }
+            const date = $('modalDate').value;
+            if (!date) return { error: 'يرجى اختيار تاريخ الجلسة' };
+            const [hh, mm] = choice.split(':').map(Number);
+            const [y, m, d] = date.split('-').map(Number);
+            const when = new Date(y, m - 1, d, hh, mm);
+            if (when < new Date()) return { error: 'يرجى اختيار موعد في المستقبل' };
+            return { date, time: choice };
+        }
+
+        function nextFromStep3() {
+            const sched = resolveSchedule();
+            const err = $('scheduleError');
+            if (sched.error) { err.innerText = sched.error; err.classList.remove('hidden'); return; }
+            err.classList.add('hidden');
+            if (needsPin()) goToStep(4);
+            else submitFinalBooking();
+        }
+
+        /* ================= Map ================= */
+        function initLeafletMap() {
+            if (map) { setTimeout(() => map.invalidateSize(), 200); return; }
+            setTimeout(() => {
+                map = L.map('leafletMap').setView([currentCoords.lat, currentCoords.lng], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
+                marker = L.marker([currentCoords.lat, currentCoords.lng], { draggable: true }).addTo(map);
+
+                const set = (lat, lng) => { currentCoords = { lat, lng }; updateMapText(); reverseGeocode(lat, lng); };
+                marker.on('dragend', () => { const p = marker.getLatLng(); set(p.lat, p.lng); });
+                map.on('click', e => { marker.setLatLng(e.latlng); set(e.latlng.lat, e.latlng.lng); });
+                setTimeout(() => map.invalidateSize(), 300);
+            }, 200);
+        }
+
+        function updateMapText() {
+            $('mapAddressText').innerText = `📍 تم تحديد الموقع: ${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}`;
+        }
+
+        function locateUserGPS() {
+            const st = $('geoStatusText');
+            st.classList.remove('hidden');
+            if (!navigator.geolocation) { showToast('خاصية تحديد الموقع غير مدعومة في متصفحك', 'error'); st.classList.add('hidden'); return; }
+            navigator.geolocation.getCurrentPosition(pos => {
+                currentCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                if (map && marker) { map.setView([currentCoords.lat, currentCoords.lng], 15); marker.setLatLng([currentCoords.lat, currentCoords.lng]); }
+                updateMapText();
+                reverseGeocode(currentCoords.lat, currentCoords.lng);
+            }, () => {
+                st.classList.add('hidden');
+                showToast('تعذر تحديد موقعك. اضغط على الخريطة لتحديده يدوياً', 'error');
+            }, { enableHighAccuracy: true, timeout: 10000 });
+        }
+
+        async function reverseGeocode(lat, lng) {
+            const st = $('geoStatusText');
+            st.classList.remove('hidden');
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=ar`);
+                const a = (await res.json()).address || {};
+                const city = a.city || a.town || a.state;
+                const district = a.suburb || a.neighbourhood || a.residential;
+                if (city) $('modalCity').value = city;
+                if (district) $('modalDistrict').value = district;
+            } catch (e) { console.warn('Geocoding error:', e); }
+            finally { st.classList.add('hidden'); }
+        }
+
+        /* ================= Save booking to the database ================= */
+        async function submitFinalBooking() {
+            if (submitting) return;
+            const needPin = needsPin();
+            const pinErr = $('pinError');
+
+            if (needPin) {
+                const pin1 = $('pinInput1').value.trim(), pin2 = $('pinInput2').value.trim();
+                if (!/^\d{4}$/.test(pin1)) { pinErr.innerText = 'يرجى إدخال رقم سري مكون من 4 أرقام'; pinErr.classList.remove('hidden'); return; }
+                if (pin1 !== pin2) { pinErr.innerText = 'الرقم السري غير متطابق، يرجى إعادة التأكيد'; pinErr.classList.remove('hidden'); return; }
+                pinErr.classList.add('hidden');
+            }
+
+            const svc = getService($('modalService').value);
+            const phone = normalizePhone($('modalPhone').value);
+            const sched = resolveSchedule();
+            if (!svc || !phone || sched.error) { showToast(sched.error || 'تحقق من بيانات الحجز', 'error'); return; }
+
+            const name = $('modalName').value.trim();
+            const address = fullAddress();
+            const mapsLink = `https://maps.google.com/?q=${currentCoords.lat},${currentCoords.lng}`;
+            const payload = {
+                full_name: name,
+                phone,
+                service_id: svc.id,
+                people_count: peopleCount,
+                booking_date: sched.date,
+                booking_time: sched.time,
+                location_address: `${address} | ${mapsLink}`,
+                notes: $('modalNotes').value.trim()
+            };
+
+            submitting = true;
+            const btnPin = $('pinSubmitBtn'), btn3 = $('step3NextBtn');
+            btnPin.disabled = true; btn3.disabled = true;
+            let fullId = '';
+            try {
+                const res = await fetch(`${API_URL}/api/bookings`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) throw new Error(data.error || 'HTTP ' + res.status);
+                // Keep the FULL UUID: the server sync endpoint needs it to find notifications
+                fullId = String(data.booking.id);
+            } catch (e) {
+                console.error(e);
+                showToast('تعذر حفظ الحجز: ' + e.message, 'error');
+                submitting = false; btnPin.disabled = false; btn3.disabled = false;
+                return;
+            }
+            submitting = false; btnPin.disabled = false; btn3.disabled = false;
+
+            // A different phone number means a different person: start a fresh account (no old bookings / notifications)
+            if (clientInfo.phone && clientInfo.phone !== phone) {
+                localBookingsList = []; userNotifications = []; unreadCount = 0;
+            }
+
+            createdBookingId = fullId.slice(0, 8).toUpperCase();
+            clientInfo = {
+                name, phone,
+                city: $('modalCity').value.trim(), district: $('modalDistrict').value.trim(),
+                street: $('modalStreet').value.trim(), houseNo: $('modalHouse').value.trim(),
+                fullAddress: address, pinSet: true
+            };
+
+            localBookingsList.unshift({
+                id: createdBookingId, fullId, service_title: svc.title,
+                booking_date: fmtDate(sched.date), booking_time: sched.time,
+                people_count: peopleCount, address,
+                total_price: svc.price * peopleCount, status: 'pending', payment_status: 'unpaid'
+            });
+            userNotifications.unshift({
+                id: Date.now(),
+                title: 'أهلاً بك في ريلاكس سبا! 🪷',
+                message: `تم استلام طلب حجزك برقم #${createdBookingId} بنجاح. ستشاهد هنا جميع التحديثات القادمة (مثل تعيين المعالجة والسائق وحالة الجلسة والدفع).`,
+                date: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
+            });
+            unreadCount++;
+            saveSessionToStorage();
+            updateAccountUI();
+
+            // Reset the form for the next booking
+            ['modalNotes', 'pinInput1', 'pinInput2'].forEach(id => $(id).value = '');
+            $('modalTime').value = 'now';
+            peopleCount = 1;
+
+            // Go straight to the client's personal page
+            $('resRef').innerText = '#' + createdBookingId;
+            closeBookingModal();
+            openAccount('home');
+            showToast('تم حفظ حجزك وإنشاء حسابك بنجاح!', 'success');
+        }
+
+        /* ================= Server sync (status + admin notifications) ================= */
+        async function syncFromServer() {
+            if (syncing) return;
+            const ids = localBookingsList.map(b => b.fullId).filter(Boolean);
+            if (!ids.length) return;
+            syncing = true;
+            try {
+                const res = await fetch(`${API_URL}/api/client/sync`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids })
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data.success) return;
+
+                let changed = false;
+
+                (data.bookings || []).forEach(sb => {
+                    const lb = localBookingsList.find(b => b.fullId === sb.id);
+                    if (lb && (lb.status !== sb.status || lb.payment_status !== sb.payment_status)) {
+                        lb.status = sb.status;
+                        lb.payment_status = sb.payment_status;
+                        changed = true;
+                    }
+                });
+
+                const known = new Set(userNotifications.map(n => n.serverId).filter(Boolean));
+                const fresh = (data.notifications || []).filter(n => !known.has(n.id));
+                fresh.reverse().forEach(n => {
+                    userNotifications.unshift({
+                        id: Date.now() + n.id,
+                        serverId: n.id,
+                        title: n.title,
+                        message: n.message,
+                        date: new Date(n.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
+                    });
+                    unreadCount++;
+                    changed = true;
+                });
+
+                if (changed) {
+                    saveSessionToStorage();
+                    updateNotificationBadgeUI();
+                    if (!$('accountPanel').classList.contains('hidden')) renderAccountTab();
+                    if (fresh.length) showToast('🔔 ' + fresh[fresh.length - 1].title, 'info');
+                }
+            } catch (e) {
+                console.warn('sync failed', e);
+            } finally {
+                syncing = false;
+            }
+        }
+
+        /* ================= Session (localStorage) ================= */
+        function saveSessionToStorage() {
+            try {
+                localStorage.setItem(SESSION_KEY, JSON.stringify({
+                    isLoggedIn: true, clientInfo, lastBookingId: createdBookingId,
+                    bookingsList: localBookingsList, notifications: userNotifications, unreadCount
+                }));
+            } catch (e) { console.warn('localStorage save failed:', e); }
+        }
+
+        function checkPersistedSession() {
+            try {
+                const p = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+                if (p && p.isLoggedIn) {
+                    clientInfo = p.clientInfo || {};
+                    if (clientInfo.name && typeof clientInfo.pinSet === 'undefined') clientInfo.pinSet = true; // older sessions already set a PIN
+                    createdBookingId = p.lastBookingId || null;
+                    localBookingsList = p.bookingsList || [];
+                    userNotifications = p.notifications || [];
+                    unreadCount = typeof p.unreadCount !== 'undefined' ? p.unreadCount : userNotifications.length;
+                    return true;
+                }
+            } catch (e) { console.warn('Session check failed:', e); }
+            return false;
+        }
+
+        function updateNotificationBadgeUI() {
+            ['headerBadge', 'tabBadge'].forEach(id => {
+                const b = $(id);
+                b.innerText = unreadCount;
+                b.classList.toggle('hidden', unreadCount <= 0);
+            });
+        }
+
+        function updateAccountUI() {
+            const loggedIn = !!(clientInfo && clientInfo.name && clientInfo.pinSet);
+            $('accountBtn').classList.toggle('hidden', !loggedIn);
+            $('accountBtn').classList.toggle('flex', loggedIn);
+            updateNotificationBadgeUI();
+        }
+
+        function logoutAccount() {
+            if (!confirm('هل تريد تسجيل الخروج وبدء حجز جديد؟')) return;
+            try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+            clientInfo = {}; localBookingsList = []; userNotifications = []; unreadCount = 0; createdBookingId = null;
+            ['modalName', 'modalPhone', 'modalCity', 'modalDistrict', 'modalStreet', 'modalHouse', 'modalNotes'].forEach(id => $(id).value = '');
+            closeAccount();
+            updateAccountUI();
+            showToast('تم تسجيل الخروج', 'info');
+        }
+
+        /* ================= Account panel ================= */
+        function openAccount(tab) {
+            checkPersistedSession();
+            $('accountPanel').classList.remove('hidden');
+            switchTab(tab || 'home');
+            syncFromServer();
+        }
+
+        function closeAccount() {
+            $('accountPanel').classList.add('hidden');
+        }
+
+        let freshCount = 0, openBookingId = null;
+
+        const FLOW = ['pending', 'assigned', 'on_the_way', 'arrived', 'in_progress', 'completed'];
+
+        function switchTab(tab) {
+            currentTab = tab;
+            if (tab !== 'notifications') freshCount = 0;
+            document.querySelectorAll('.acc-tab').forEach(b => {
+                const on = b.dataset.tab === tab;
+                b.classList.toggle('text-sunset-600', on);
+                b.classList.toggle('border-sunset-500', on);
+                b.classList.toggle('text-slate-400', !on);
+                b.classList.toggle('border-transparent', !on);
+            });
+            renderAccountTab();
+            try { $('accountPanel').scrollTo({ top: 0 }); } catch (e) {}
+        }
+
+        function bookingProgress(status) {
+            if (status === 'cancelled') return 0;
+            const idx = FLOW.indexOf(status);
+            return Math.round((Math.max(0, idx) / (FLOW.length - 1)) * 100);
+        }
+
+        function statusPillClass(status) {
+            return status === 'completed' ? 'bg-emerald-50 text-emerald-700'
+                 : status === 'cancelled' ? 'bg-rose-50 text-rose-700'
+                 : status === 'pending' ? 'bg-amber-50 text-amber-700'
+                 : 'bg-sky-50 text-sky-700';
+        }
+
+        function progressBar(status) {
+            if (status === 'cancelled') return '';
+            return `<div class="h-1.5 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-sunset-gradient rounded-full transition-all" style="width:${bookingProgress(status)}%"></div></div>`;
+        }
+
+        function payLabel(p) {
+            return p === 'paid' ? 'مدفوع ✅' : p === 'refunded' ? 'مسترجع' : 'غير مدفوع';
+        }
+
+        function toggleBooking(id) {
+            openBookingId = openBookingId === id ? null : id;
+            renderAccountTab();
+        }
+
+        function bookingCardHTML(item) {
+            const open = openBookingId === item.id;
+            const row = (k, v) => `<div class="flex justify-between gap-3 text-xs"><span class="text-slate-400">${k}</span><span class="font-bold text-slate-700 text-left">${v}</span></div>`;
+            return `
+            <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <button onclick="toggleBooking('${esc(item.id)}')" class="w-full text-right p-4 space-y-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <h4 class="text-sm font-extrabold text-slate-900 truncate">${esc(item.service_title)}</h4>
+                        <span class="text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${statusPillClass(item.status)}">${esc(STATUS_LABELS[item.status] || '')}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-slate-500">
+                        <span>${esc(item.booking_date)} · ${esc(item.booking_time)}</span>
+                        <span class="font-extrabold text-slate-800">${esc(item.total_price)} ر.س</span>
+                    </div>
+                    ${progressBar(item.status)}
+                </button>
+                ${open ? `<div class="px-4 pb-4 pt-3 border-t border-slate-100 space-y-2 bg-slate-50/60">
+                    ${row('رقم الحجز', '#' + esc(item.id))}
+                    ${row('الأشخاص', esc(item.people_count))}
+                    ${row('الدفع', payLabel(item.payment_status))}
+                    ${row('العنوان', esc(item.address))}
+                </div>` : ''}
+            </div>`;
+        }
+
+        function emptyState(icon, title, sub) {
+            return `<div class="text-center py-12 space-y-2">
+                <div class="w-14 h-14 rounded-full bg-amber-50 text-sunset-500 flex items-center justify-center text-xl mx-auto"><i class="fa-solid ${icon}"></i></div>
+                <p class="text-sm font-extrabold text-slate-700">${title}</p>
+                <p class="text-xs text-slate-400">${sub}</p>
+            </div>`;
+        }
+
+        function renderAccountTab() {
+            // Notifications tab: remember which ones are new, then mark them as read
+            if (currentTab === 'notifications' && unreadCount > 0) {
+                freshCount = unreadCount; unreadCount = 0;
+                saveSessionToStorage(); updateNotificationBadgeUI();
+            }
+
+            const name = clientInfo.name || '';
+            $('accName').innerText = name || '--';
+            $('accAvatar').innerText = name ? name.trim().charAt(0) : '؟';
+            $('accPhone').innerText = clientInfo.phone || '';
+
+            const body = $('accountBody');
+            const newBtn = `<button onclick="closeAccount(); openBookingModal()" class="w-full bg-sunset-gradient text-white font-extrabold text-sm py-3.5 rounded-2xl shadow-lg shadow-orange-500/20 hover:opacity-95 transition"><i class="fa-solid fa-plus ml-1.5"></i>حجز جلسة جديدة</button>`;
+
+            /* ---------- Home ---------- */
+            if (currentTab === 'home') {
+                const last = localBookingsList[0];
+                const lastCard = last ? `
+                    <button onclick="switchTab('appointments')" class="w-full text-right bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-3 hover:border-sunset-500 transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-bold text-amber-700">آخر حجز</span>
+                            <span class="text-[10px] font-bold px-2.5 py-1 rounded-full ${statusPillClass(last.status)}">${esc(STATUS_LABELS[last.status] || '')}</span>
+                        </div>
+                        <h3 class="text-base font-black text-slate-900">${esc(last.service_title)}</h3>
+                        <p class="text-xs text-slate-500">${esc(last.booking_date)} · ${esc(last.booking_time)}</p>
+                        ${progressBar(last.status)}
+                    </button>`
+                    : emptyState('fa-calendar-plus', 'لا توجد حجوزات بعد', 'احجز جلستك الأولى الآن');
+
+                body.innerHTML = `${lastCard}${newBtn}
+                    <button onclick="logoutAccount()" class="w-full text-xs font-bold text-slate-400 hover:text-rose-500 py-3 transition">تسجيل الخروج</button>`;
+
+            /* ---------- Appointments ---------- */
+            } else if (currentTab === 'appointments') {
+                body.innerHTML = localBookingsList.length
+                    ? localBookingsList.map(bookingCardHTML).join('') + newBtn
+                    : emptyState('fa-calendar-xmark', 'لا توجد مواعيد', 'ستظهر حجوزاتك هنا') + newBtn;
+
+            /* ---------- Notifications ---------- */
+            } else {
+                const list = userNotifications.map((n, i) => {
+                    const isNew = i < freshCount;
+                    const lines = String(n.message || '').split(' • ').filter(Boolean).map(esc).join('<br>');
+                    return `
+                    <div class="flex gap-3 p-3.5 rounded-2xl ${isNew ? 'bg-amber-50 border border-amber-200' : 'bg-white border border-slate-200'}">
+                        <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm ${isNew ? 'bg-sunset-gradient text-white' : 'bg-slate-100 text-slate-400'}"><i class="fa-solid fa-bell"></i></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-start justify-between gap-2">
+                                <h4 class="text-xs font-extrabold text-slate-800 leading-snug">${esc(n.title)}</h4>
+                                <span class="text-[10px] text-slate-400 whitespace-nowrap">${esc(n.date)}</span>
+                            </div>
+                            <p class="text-xs text-slate-600 leading-relaxed mt-1">${lines}</p>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                body.innerHTML = userNotifications.length
+                    ? `${list}<button onclick="clearNotifications()" class="w-full text-xs font-bold text-slate-400 hover:text-rose-500 py-3 transition">مسح الكل</button>`
+                    : emptyState('fa-bell-slash', 'لا توجد إشعارات', 'ستصلك هنا تحديثات حجزك');
+            }
+        }
+
+        function clearNotifications() {
+            userNotifications = []; unreadCount = 0;
+            saveSessionToStorage(); updateNotificationBadgeUI(); renderAccountTab();
+        }
+
+        window.addEventListener('storage', e => {
+            if (e.key === SESSION_KEY) {
+                checkPersistedSession();
+                updateAccountUI();
+                if (!$('accountPanel').classList.contains('hidden')) renderAccountTab();
+            }
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { closeAccount(); }
+        });
+
+        /* ================= Init ================= */
+        (function init() {
+            const today = localISODate(new Date());
+            $('modalDate').min = today;
+            $('modalDate').value = today;
+
+            if (checkPersistedSession()) updateAccountUI();
+
+            loadServices().then(renderServices);
+
+            // Poll the server for status changes + notifications sent from the admin panel
+            setInterval(syncFromServer, SYNC_INTERVAL_MS);
+            document.addEventListener('visibilitychange', () => { if (!document.hidden) syncFromServer(); });
+            syncFromServer();
+        })();
+    </script>
 </body>
 </html>
