@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 
 const app = express();
@@ -16,7 +18,7 @@ process.on('uncaughtException', (e) => console.error('⚠️ uncaughtException:'
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' })); // staff photos arrive as small base64 images
 
 // ==========================================
 // Admin protection (HTTP Basic Auth)
@@ -70,6 +72,7 @@ pool.on('error', (err) => {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAYMENT_STATUSES = ['unpaid', 'paid', 'refunded'];
+const STAFF_ROLES = ['therapist', 'driver'];
 
 const STATUS_MESSAGES = {
   pending: 'حجزك قيد المراجعة',
@@ -87,7 +90,8 @@ const PAYMENT_MESSAGES = {
 };
 
 // The tables users, services and bookings already exist in Neon.
-// We only add ONE new table (booking_notifications) for the client notifications.
+// We add ONE new table (booking_notifications) for the client notifications,
+// and two columns on users (password_hash, photo_url) for therapist / driver accounts.
 async function initDatabase() {
   const client = await pool.connect();
   try {
@@ -105,6 +109,10 @@ async function initDatabase() {
       'CREATE INDEX IF NOT EXISTS idx_booking_notifications_booking ON booking_notifications (booking_id)'
     );
     console.log('✅ "booking_notifications" table verified.');
+
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
+    console.log('✅ "users" staff columns verified.');
   } finally {
     client.release();
   }
@@ -148,8 +156,14 @@ app.post('/api/bookings', async (req, res) => {
   try {
     await db.query('BEGIN');
 
-    // Find the client by phone, or create a new user
-    const existing = await db.query('SELECT id FROM users WHERE phone = $1 LIMIT 1', [client_phone]);
+    // Find the client by phone, or create a new user.
+    // Staff accounts (therapist / driver) are never reused as clients.
+    const existing = await db.query(
+      `SELECT id FROM users
+       WHERE phone = $1 AND COALESCE(role::text, '') NOT IN ('therapist', 'driver')
+       LIMIT 1`,
+      [client_phone]
+    );
     let clientId;
     if (existing.rows.length > 0) {
       clientId = existing.rows[0].id;
@@ -205,11 +219,11 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-// List staff (therapists and drivers) for the admin dropdowns
+// List staff (therapists and drivers) for the admin dropdowns and staff pages
 app.get('/api/admin/staff', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, full_name, phone, role::text AS role
+      `SELECT id, full_name, phone, role::text AS role, photo_url
        FROM users
        WHERE role::text IN ('therapist', 'driver')
        ORDER BY full_name`
@@ -218,6 +232,45 @@ app.get('/api/admin/staff', async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching staff:', error);
     res.status(500).json({ error: 'Database error while fetching staff', detail: error.message });
+  }
+});
+
+// Create a therapist / driver account (name, phone, password, optional photo)
+app.post('/api/admin/staff', async (req, res) => {
+  const b = req.body || {};
+  const role = String(b.role || '');
+  const fullName = String(b.full_name || '').trim();
+  const phone = String(b.phone || '').trim();
+  const password = String(b.password || '');
+  const photo = b.photo ? String(b.photo) : null;
+
+  if (!STAFF_ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  if (fullName.length < 2 || fullName.length > 100) return res.status(400).json({ error: 'Invalid name' });
+  if (!/^\+?\d{9,15}$/.test(phone)) return res.status(400).json({ error: 'Invalid phone' });
+  if (password.length < 8 || Buffer.byteLength(password) > 72) return res.status(400).json({ error: 'Invalid password' });
+  if (photo && (!/^data:image\/(jpeg|png|webp);base64,/.test(photo) || photo.length > 400000)) {
+    return res.status(400).json({ error: 'Invalid photo' });
+  }
+
+  try {
+    const dup = await pool.query(
+      `SELECT 1 FROM users WHERE phone = $1 AND role::text IN ('therapist', 'driver') LIMIT 1`,
+      [phone]
+    );
+    if (dup.rows.length > 0) return res.status(409).json({ error: 'Phone already used by a staff member' });
+
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      `INSERT INTO users (full_name, phone, role, password_hash, photo_url)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, full_name, phone, role::text AS role, photo_url`,
+      [fullName, phone, role, hash, photo]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Error creating staff:', error);
+    const code = error.code === '22P02' ? 400 : 500; // 22P02 = role value missing from the enum
+    res.status(code).json({ error: 'Could not create the account', detail: error.message });
   }
 });
 
@@ -382,6 +435,140 @@ app.patch('/api/admin/bookings/:id', async (req, res) => {
     // 22P02 = invalid value for the status enum or invalid id
     const code = error.code === '22P02' ? 400 : 500;
     res.status(code).json({ error: 'Could not update status', detail: error.message });
+  }
+});
+
+// ==========================================
+// STAFF SYSTEM (therapists and drivers log in from public/staff.html)
+// ==========================================
+
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10); // keeps login timing equal for unknown phones
+const loginFails = new Map(); // "ip|phone" -> { n, until }
+
+// What each role may do, and from which status (the client gets a notification each time)
+const STAFF_FLOW = {
+  driver:    { assigned: 'on_the_way', on_the_way: 'arrived' },
+  therapist: { arrived: 'in_progress', in_progress: 'completed' }
+};
+
+function requireStaff(req, res, next) {
+  try {
+    if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is not set');
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (!STAFF_ROLES.includes(payload.role)) throw new Error('bad role');
+    req.staff = payload;
+    next();
+  } catch (e) {
+    res.status(401).json({ error: 'unauthorized' });
+  }
+}
+
+app.post('/api/staff/login', async (req, res) => {
+  try {
+    if (!process.env.JWT_SECRET) return res.status(500).json({ error: 'JWT_SECRET is not set on the server' });
+
+    const phone = String((req.body && req.body.phone) || '').trim();
+    const password = String((req.body && req.body.password) || '');
+    const key = `${req.ip}|${phone}`;
+    const fails = loginFails.get(key);
+    if (fails && fails.n >= 5 && Date.now() < fails.until) {
+      return res.status(429).json({ error: 'Too many attempts, try again later' });
+    }
+
+    const result = await pool.query(
+      `SELECT id, full_name, role::text AS role, photo_url, password_hash
+       FROM users
+       WHERE phone = $1 AND role::text IN ('therapist', 'driver') AND password_hash IS NOT NULL
+       LIMIT 1`,
+      [phone]
+    );
+    const u = result.rows[0];
+    const ok = await bcrypt.compare(password, u ? u.password_hash : DUMMY_HASH);
+
+    if (!u || !ok) {
+      loginFails.set(key, { n: (fails ? fails.n : 0) + 1, until: Date.now() + 10 * 60 * 1000 });
+      return res.status(401).json({ error: 'wrong credentials' });
+    }
+    loginFails.delete(key);
+
+    const token = jwt.sign({ id: u.id, role: u.role }, process.env.JWT_SECRET, { expiresIn: '12h' });
+    res.json({ token, user: { id: u.id, full_name: u.full_name, role: u.role, photo_url: u.photo_url } });
+  } catch (error) {
+    console.error('❌ Staff login error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// The logged-in staff member's own bookings
+app.get('/api/staff/me/bookings', requireStaff, async (req, res) => {
+  try {
+    const col = req.staff.role === 'therapist' ? 'therapist_id' : 'driver_id';
+    const result = await pool.query(
+      `SELECT
+         b.id,
+         u.full_name AS client_name,
+         u.phone AS client_phone,
+         s.title AS service_title,
+         s.duration_minutes,
+         to_char(b.booking_date, 'YYYY-MM-DD') AS booking_date,
+         to_char(b.booking_time, 'HH24:MI') AS booking_time,
+         b.location_address,
+         b.notes,
+         b.people_count,
+         b.status::text AS status
+       FROM bookings b
+       LEFT JOIN users u ON u.id = b.client_id
+       LEFT JOIN services s ON s.id = b.service_id
+       WHERE b.${col} = $1 AND b.status::text <> 'cancelled'
+       ORDER BY b.booking_date DESC, b.booking_time DESC
+       LIMIT 100`,
+      [req.staff.id]
+    );
+    res.json(result.rows.map((r) => ({ ...r, next_status: (STAFF_FLOW[req.staff.role] || {})[r.status] || null })));
+  } catch (error) {
+    console.error('❌ Error fetching staff bookings:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Move one of my bookings to the next step (driver: on the way / arrived, therapist: started / finished)
+app.put('/api/staff/me/bookings/:id', requireStaff, async (req, res) => {
+  const { id } = req.params;
+  if (!UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid booking id' });
+
+  const col = req.staff.role === 'therapist' ? 'therapist_id' : 'driver_id';
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const cur = await db.query(
+      `SELECT status::text AS status FROM bookings WHERE id = $1 AND ${col} = $2 FOR UPDATE`,
+      [id, req.staff.id]
+    );
+    if (cur.rows.length === 0) {
+      await db.query('ROLLBACK');
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    const next = (STAFF_FLOW[req.staff.role] || {})[cur.rows[0].status];
+    if (!next || next !== (req.body && req.body.status)) {
+      await db.query('ROLLBACK');
+      return res.status(400).json({ error: 'This step is not allowed now' });
+    }
+
+    await db.query('UPDATE bookings SET status = $1::booking_status WHERE id = $2', [next, id]);
+    await db.query(
+      'INSERT INTO booking_notifications (booking_id, title, message) VALUES ($1, $2, $3)',
+      [id, `تحديث على حجزك #${id.slice(0, 8).toUpperCase()}`, STATUS_MESSAGES[next] || 'تم تحديث حالة حجزك']
+    );
+    await db.query('COMMIT');
+    res.json({ success: true, status: next });
+  } catch (error) {
+    await db.query('ROLLBACK').catch(() => {});
+    console.error('❌ Error updating staff booking:', error);
+    res.status(500).json({ error: 'Could not update the booking' });
+  } finally {
+    db.release();
   }
 });
 

@@ -78,7 +78,6 @@
         .glass-header {
             background: rgba(250, 247, 242, 0.88);
             backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
         }
         .hero-pattern {
             background-color: #faf7f2;
@@ -92,7 +91,7 @@
         ::-webkit-scrollbar-thumb { background: #f9a756; border-radius: 4px; }
         #leafletMap { height: 220px; border-radius: 1rem; z-index: 10; }
         .pin-input { letter-spacing: 0.5em; text-align: center; }
-        input, textarea { user-select: text; -webkit-user-select: text; }
+        input, textarea { user-select: text; }
     </style>
 </head>
 <body class="antialiased min-h-screen flex flex-col justify-between selection:bg-amber-200 selection:text-amber-900">
@@ -469,7 +468,7 @@
                 <div id="step2" class="space-y-4 hidden">
                     <h5 class="font-extrabold text-slate-800 text-sm border-r-4 border-sunset-500 pr-2">الخطوة 2: تحديد موقع المنزل على الخريطة</h5>
 
-                    <button id="geoBtn" onclick="locateUserGPS()" type="button" class="w-full py-2.5 px-3 bg-emeraldDark hover:bg-emerald-900 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 shadow transition disabled:opacity-60">
+                    <button onclick="locateUserGPS()" type="button" class="w-full py-2.5 px-3 bg-emeraldDark hover:bg-emerald-900 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 shadow transition">
                         <i class="fa-solid fa-crosshairs text-amber-300"></i>
                         <span>تحديد موقعي تلقائياً (المدينة والحي)</span>
                     </button>
@@ -798,7 +797,7 @@
         let localBookingsList = [], userNotifications = [], unreadCount = 0;
         let map = null, marker = null, currentCoords = { lat: 21.5433, lng: 39.1728 };
         let currentStep = 1, currentTab = 'home';
-        let syncing = false, submitting = false, locating = false;
+        let syncing = false, submitting = false;
 
         /* ================= Helpers ================= */
         function pad(n) { return String(n).padStart(2, '0'); }
@@ -953,9 +952,11 @@
         }
 
         function openBookingModal() {
-            // Always start with an empty form (no old name / phone / address)
-            ['modalName', 'modalPhone', 'modalCity', 'modalDistrict', 'modalStreet', 'modalHouse', 'modalNotes', 'pinInput1', 'pinInput2']
-                .forEach(id => { $(id).value = ''; });
+            // Registered client on this device: pre-fill saved details. Otherwise start with an empty form.
+            ['modalNotes', 'pinInput1', 'pinInput2'].forEach(id => { $(id).value = ''; });
+            const registered = !!(clientInfo && clientInfo.name && clientInfo.pinSet);
+            const saved = { modalName: 'name', modalPhone: 'phone', modalCity: 'city', modalDistrict: 'district', modalStreet: 'street', modalHouse: 'houseNo' };
+            Object.keys(saved).forEach(id => { $(id).value = registered ? (clientInfo[saved[id]] || '') : ''; });
             $('modalTime').value = 'now';
             ['phoneError', 'locationError', 'scheduleError', 'pinError', 'modalServiceError'].forEach(id => $(id).classList.add('hidden'));
 
@@ -1083,60 +1084,19 @@
             $('mapAddressText').innerText = `📍 تم تحديد الموقع: ${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}`;
         }
 
-        /* ---- Auto location (Safari-friendly) ---- */
-        function finishLocating() {
-            locating = false;
-            $('geoStatusText').classList.add('hidden');
-            const btn = $('geoBtn');
-            if (btn) btn.disabled = false;
-        }
-
         function locateUserGPS() {
-            if (locating) return;
-
-            // Geolocation only works on HTTPS (or localhost). Safari blocks it otherwise.
-            if (!window.isSecureContext) {
-                showToast('تحديد الموقع يتطلب اتصالاً آمناً (HTTPS). يمكنك الضغط على الخريطة لتحديده يدوياً', 'error');
-                return;
-            }
-            if (!navigator.geolocation) {
-                showToast('خاصية تحديد الموقع غير مدعومة في متصفحك', 'error');
-                return;
-            }
-
-            locating = true;
-            $('geoStatusText').classList.remove('hidden');
-            $('geoBtn').disabled = true;
-
-            const onSuccess = pos => {
+            const st = $('geoStatusText');
+            st.classList.remove('hidden');
+            if (!navigator.geolocation) { showToast('خاصية تحديد الموقع غير مدعومة في متصفحك', 'error'); st.classList.add('hidden'); return; }
+            navigator.geolocation.getCurrentPosition(pos => {
                 currentCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                if (map && marker) {
-                    map.setView([currentCoords.lat, currentCoords.lng], 15);
-                    marker.setLatLng([currentCoords.lat, currentCoords.lng]);
-                }
+                if (map && marker) { map.setView([currentCoords.lat, currentCoords.lng], 15); marker.setLatLng([currentCoords.lat, currentCoords.lng]); }
                 updateMapText();
-                // reverseGeocode manages its own status text; release the button right away
-                $('geoBtn').disabled = false;
-                locating = false;
                 reverseGeocode(currentCoords.lat, currentCoords.lng);
-            };
-
-            const onError = err => {
-                finishLocating();
-                const msgs = {
-                    1: 'تم رفض إذن الموقع. فعّله من إعدادات Safari / خدمات الموقع ثم أعد المحاولة',
-                    2: 'تعذر تحديد الموقع حالياً، تأكد من تفعيل خدمات الموقع',
-                    3: 'انتهت مهلة تحديد الموقع، حاول مرة أخرى'
-                };
-                showToast(msgs[err && err.code] || 'تعذر تحديد موقعك. اضغط على الخريطة لتحديده يدوياً', 'error');
-            };
-
-            // Normal accuracy first: faster and more reliable in Safari
-            navigator.geolocation.getCurrentPosition(onSuccess, onError, {
-                enableHighAccuracy: false,
-                timeout: 15000,
-                maximumAge: 60000
-            });
+            }, () => {
+                st.classList.add('hidden');
+                showToast('تعذر تحديد موقعك. اضغط على الخريطة لتحديده يدوياً', 'error');
+            }, { enableHighAccuracy: true, timeout: 10000 });
         }
 
         async function reverseGeocode(lat, lng) {
