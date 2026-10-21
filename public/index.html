@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ريلاكس سبا منزلي - مساج واستجمام فاخر في منزلك</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -164,6 +165,7 @@
                     </div>
 
                     <h2 class="text-4xl sm:text-6xl font-black text-slate-900 leading-tight">
+                        استعد حيوية <span class="text-gradient">جسدك وروحك</span> في راحة بيتك
                     </h2>
 
                     <p class="text-slate-600 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto lg:mx-0">
@@ -950,9 +952,11 @@
         }
 
         function openBookingModal() {
-            // Always start with an empty form (no old name / phone / address)
-            ['modalName', 'modalPhone', 'modalCity', 'modalDistrict', 'modalStreet', 'modalHouse', 'modalNotes', 'pinInput1', 'pinInput2']
-                .forEach(id => { $(id).value = ''; });
+            // Registered client on this device: pre-fill saved details. Otherwise start with an empty form.
+            ['modalNotes', 'pinInput1', 'pinInput2'].forEach(id => { $(id).value = ''; });
+            const registered = !!(clientInfo && clientInfo.name && clientInfo.pinSet);
+            const saved = { modalName: 'name', modalPhone: 'phone', modalCity: 'city', modalDistrict: 'district', modalStreet: 'street', modalHouse: 'houseNo' };
+            Object.keys(saved).forEach(id => { $(id).value = registered ? (clientInfo[saved[id]] || '') : ''; });
             $('modalTime').value = 'now';
             ['phoneError', 'locationError', 'scheduleError', 'pinError', 'modalServiceError'].forEach(id => $(id).classList.add('hidden'));
 

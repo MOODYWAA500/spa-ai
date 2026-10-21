@@ -45,13 +45,15 @@ function adminAuth(req, res, next) {
   res.status(401).send('Authentication required');
 }
 
-// These must come BEFORE express.static so /admin.html can't be opened directly
+// These must come BEFORE express.static so admin routes are protected
 app.use('/admin', adminAuth);
 app.use('/admin.html', adminAuth);
 app.use('/api/admin', adminAuth);
 
-// Serve static frontend files from the "public" folder
-app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+// ==========================================
+// SERVE STATIC FILES FROM CURRENT DIRECTORY
+// ==========================================
+app.use(express.static(path.join(__dirname, './'), { index: false }));
 
 // PostgreSQL connection setup using process.env.DATABASE_URL
 const pool = new Pool({
@@ -60,12 +62,11 @@ const pool = new Pool({
     rejectUnauthorized: false // Required for Neon PostgreSQL
   },
   max: 5,
-  idleTimeoutMillis: 10000,       // close idle connections before Neon does
-  connectionTimeoutMillis: 10000, // Neon may need a moment to wake up
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 10000,
   keepAlive: true
 });
 
-// Without this handler an idle-connection drop crashes the whole process
 pool.on('error', (err) => {
   console.error('⚠️ Pool error (ignored):', err.message);
 });
@@ -89,9 +90,6 @@ const PAYMENT_MESSAGES = {
   refunded: 'تم استرجاع المبلغ'
 };
 
-// The tables users, services and bookings already exist in Neon.
-// We add ONE new table (booking_notifications) for the client notifications,
-// and two columns on users (password_hash, photo_url) for therapist / driver accounts.
 async function initDatabase() {
   const client = await pool.connect();
   try {
@@ -123,12 +121,10 @@ initDatabase().catch((err) => console.error('❌ Error initializing database:', 
 // API ENDPOINTS
 // ==========================================
 
-// Health Check / Keep-Alive ping endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// List services (for the booking page)
 app.get('/api/services', async (req, res) => {
   try {
     const result = await pool.query(
@@ -141,7 +137,6 @@ app.get('/api/services', async (req, res) => {
   }
 });
 
-// Create a new booking
 app.post('/api/bookings', async (req, res) => {
   const body = req.body || {};
   const client_name = body.full_name || body.client_name;
@@ -156,8 +151,6 @@ app.post('/api/bookings', async (req, res) => {
   try {
     await db.query('BEGIN');
 
-    // Find the client by phone, or create a new user.
-    // Staff accounts (therapist / driver) are never reused as clients.
     const existing = await db.query(
       `SELECT id FROM users
        WHERE phone = $1 AND COALESCE(role::text, '') NOT IN ('therapist', 'driver')
@@ -175,7 +168,6 @@ app.post('/api/bookings', async (req, res) => {
       clientId = created.rows[0].id;
     }
 
-    // The old bookings table has no latitude/longitude, so keep the map link inside notes
     let fullNotes = notes || '';
     if (latitude && longitude) {
       fullNotes += (fullNotes ? '\n' : '') + `https://www.google.com/maps?q=${latitude},${longitude}`;
@@ -219,7 +211,6 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-// List staff (therapists and drivers) for the admin dropdowns and staff pages
 app.get('/api/admin/staff', async (req, res) => {
   try {
     const result = await pool.query(
@@ -235,7 +226,6 @@ app.get('/api/admin/staff', async (req, res) => {
   }
 });
 
-// Create a therapist / driver account (name, phone, password, optional photo)
 app.post('/api/admin/staff', async (req, res) => {
   const b = req.body || {};
   const role = String(b.role || '');
@@ -269,12 +259,11 @@ app.post('/api/admin/staff', async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('❌ Error creating staff:', error);
-    const code = error.code === '22P02' ? 400 : 500; // 22P02 = role value missing from the enum
+    const code = error.code === '22P02' ? 400 : 500;
     res.status(code).json({ error: 'Could not create the account', detail: error.message });
   }
 });
 
-// Get all bookings for Admin (joined with client, service, therapist and driver)
 app.get('/api/admin/bookings', async (req, res) => {
   try {
     const query = `
@@ -303,7 +292,6 @@ app.get('/api/admin/bookings', async (req, res) => {
       LEFT JOIN users d ON d.id = b.driver_id
       ORDER BY b.created_at DESC;
     `;
-
     const result = await pool.query(query);
     res.json(result.rows);
   } catch (error) {
@@ -312,7 +300,6 @@ app.get('/api/admin/bookings', async (req, res) => {
   }
 });
 
-// Assign therapist + driver, set status / payment, and notify the client
 app.put('/api/admin/bookings/:id/assign', async (req, res) => {
   const { id } = req.params;
   const body = req.body || {};
@@ -346,7 +333,6 @@ app.put('/api/admin/bookings/:id/assign', async (req, res) => {
     const newStatus = body.status || old.status;
     const newPayment = body.payment_status || old.payment_status;
 
-    // Make sure the chosen people exist and have the right role
     const staffIds = [therapistId, driverId].filter(Boolean);
     const staffRes = await db.query(
       'SELECT id, full_name, role::text AS role FROM users WHERE id = ANY($1::uuid[])',
@@ -371,7 +357,6 @@ app.put('/api/admin/bookings/:id/assign', async (req, res) => {
       [therapistId, driverId, newStatus, newPayment, id]
     );
 
-    // Build the message for the client from what actually changed
     const lines = [];
     if (therapistId && therapistId !== old.therapist_id) {
       lines.push(`تم تعيين المعالجة ${staff[therapistId].full_name} لجلستك`);
@@ -390,7 +375,7 @@ app.put('/api/admin/bookings/:id/assign', async (req, res) => {
     if (lines.length > 0) {
       await db.query(
         'INSERT INTO booking_notifications (booking_id, title, message) VALUES ($1, $2, $3)',
-        [id, `تحديث على حجزك #${id.slice(0, 8).toUpperCase()}`, lines.join(' • ')]
+        [id, `تحديث على حجزك #${id.slice(0, 8).toUpperCase()}`, lines.join('\n')]
       );
       notified = true;
     }
@@ -407,7 +392,6 @@ app.put('/api/admin/bookings/:id/assign', async (req, res) => {
   }
 });
 
-// Update booking status
 app.patch('/api/admin/bookings/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -432,20 +416,18 @@ app.patch('/api/admin/bookings/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error updating booking status:', error);
-    // 22P02 = invalid value for the status enum or invalid id
     const code = error.code === '22P02' ? 400 : 500;
     res.status(code).json({ error: 'Could not update status', detail: error.message });
   }
 });
 
 // ==========================================
-// STAFF SYSTEM (therapists and drivers log in from public/staff.html)
+// STAFF SYSTEM
 // ==========================================
 
-const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10); // keeps login timing equal for unknown phones
-const loginFails = new Map(); // "ip|phone" -> { n, until }
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
+const loginFails = new Map();
 
-// What each role may do, and from which status (the client gets a notification each time)
 const STAFF_FLOW = {
   driver:    { assigned: 'on_the_way', on_the_way: 'arrived' },
   therapist: { arrived: 'in_progress', in_progress: 'completed' }
@@ -500,23 +482,22 @@ app.post('/api/staff/login', async (req, res) => {
   }
 });
 
-// The logged-in staff member's own bookings
 app.get('/api/staff/me/bookings', requireStaff, async (req, res) => {
   try {
     const col = req.staff.role === 'therapist' ? 'therapist_id' : 'driver_id';
     const result = await pool.query(
       `SELECT
-         b.id,
-         u.full_name AS client_name,
-         u.phone AS client_phone,
-         s.title AS service_title,
-         s.duration_minutes,
-         to_char(b.booking_date, 'YYYY-MM-DD') AS booking_date,
-         to_char(b.booking_time, 'HH24:MI') AS booking_time,
-         b.location_address,
-         b.notes,
-         b.people_count,
-         b.status::text AS status
+          b.id,
+          u.full_name AS client_name,
+          u.phone AS client_phone,
+          s.title AS service_title,
+          s.duration_minutes,
+          to_char(b.booking_date, 'YYYY-MM-DD') AS booking_date,
+          to_char(b.booking_time, 'HH24:MI') AS booking_time,
+          b.location_address,
+          b.notes,
+          b.people_count,
+          b.status::text AS status
        FROM bookings b
        LEFT JOIN users u ON u.id = b.client_id
        LEFT JOIN services s ON s.id = b.service_id
@@ -532,7 +513,6 @@ app.get('/api/staff/me/bookings', requireStaff, async (req, res) => {
   }
 });
 
-// Move one of my bookings to the next step (driver: on the way / arrived, therapist: started / finished)
 app.put('/api/staff/me/bookings/:id', requireStaff, async (req, res) => {
   const { id } = req.params;
   if (!UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid booking id' });
@@ -572,8 +552,6 @@ app.put('/api/staff/me/bookings/:id', requireStaff, async (req, res) => {
   }
 });
 
-// Client page asks for the latest status + notifications of ITS OWN bookings.
-// The booking ids (random UUIDs, only known to the client who made the booking) act as the key.
 app.post('/api/client/sync', async (req, res) => {
   try {
     const raw = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
@@ -610,21 +588,17 @@ app.post('/api/client/sync', async (req, res) => {
 // FRONTEND PAGE ROUTES
 // ==========================================
 
-// Serve main Client Booking App
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'booking.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Serve Admin Dashboard App (protected by adminAuth above)
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Fallback for any unknown route
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'booking.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server listening on port ${PORT}`);
