@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>دخول الموظفين</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<script>tailwind.config={theme:{extend:{fontFamily:{sans:['Tajawal','system-ui','sans-serif']},colors:{brand:'#5b4cf0',ink:'#14162a',panel:'#1c1e33'}}}}</script>
+<style>
+  body{background:#ecebfa;font-family:'Tajawal',sans-serif}
+  .field{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:14px;padding:.7rem .9rem;width:100%;outline:none}
+  .field:focus{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.2)}
+</style>
+</head>
+<body class="text-ink min-h-screen p-4">
+
+<!-- Login -->
+<div id="loginView" class="max-w-sm mx-auto mt-16 bg-ink text-white rounded-3xl p-8">
+  <h1 class="text-2xl font-extrabold mb-1">دخول الموظفين</h1>
+  <p class="text-sm text-slate-400 mb-6">ادخل برقم جوالك وكلمة المرور التي سلّمتها لك الإدارة.</p>
+  <div class="space-y-4">
+    <label class="block text-sm">رقم الجوال<input id="phone" class="field mt-1.5" dir="ltr" inputmode="tel" autocomplete="username"></label>
+    <label class="block text-sm">كلمة المرور<input id="pass" type="password" class="field mt-1.5" dir="ltr" autocomplete="current-password"></label>
+  </div>
+  <p id="err" class="text-rose-300 text-sm mt-3 min-h-[1.25rem]"></p>
+  <button id="loginBtn" class="bg-white text-ink font-extrabold rounded-full px-7 py-3 w-full mt-3 disabled:opacity-60">دخول</button>
+</div>
+
+<!-- Dashboard -->
+<div id="appView" class="hidden max-w-2xl mx-auto">
+  <header class="flex items-center gap-4 mb-6">
+    <div id="avatar"></div>
+    <div class="flex-1">
+      <div id="who" class="text-lg font-extrabold"></div>
+      <div id="roleLbl" class="text-sm text-slate-500"></div>
+    </div>
+    <button id="refresh" class="bg-white border border-slate-200 rounded-full px-4 py-2 text-sm"><i class="fa-solid fa-rotate"></i></button>
+    <button id="logout" class="bg-white border border-slate-200 rounded-full px-4 py-2 text-sm">خروج</button>
+  </header>
+  <div id="items" class="space-y-3"></div>
+</div>
+
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-ink text-white px-5 py-3 rounded-full text-sm shadow-lg opacity-0 pointer-events-none transition-opacity"></div>
+
+<script>
+const isLocal = ['localhost', '127.0.0.1', ''].includes(location.hostname);
+const API = (location.protocol === 'file:' || (isLocal && location.port !== '5000')) ? 'http://localhost:5000/api' : '/api';
+const $ = id => document.getElementById(id);
+
+const STATUS = { pending:'قيد الانتظار', assigned:'تم التعيين', on_the_way:'في الطريق', arrived:'وصل المعالج', in_progress:'قيد التنفيذ', completed:'مكتمل', cancelled:'ملغى' };
+// Button text for the next step, by status it moves to
+const ACTION = {
+  on_the_way:  { label: 'أنا في الطريق',  cls: 'bg-white text-ink' },
+  arrived:     { label: 'وصلت إلى الموقع', cls: 'bg-white text-ink' },
+  in_progress: { label: 'بدء الجلسة',     cls: 'bg-white text-ink' },
+  completed:   { label: 'إنهاء الجلسة',   cls: 'bg-emerald-400 text-ink' }
+};
+
+let token = localStorage.getItem('staffToken');
+let user = JSON.parse(localStorage.getItem('staffUser') || 'null');
+
+function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.opacity=0,2800);}
+
+// The booking page stores the address as "text | map link": split them
+function splitAddress(address, notes) {
+  const urlRe = /https?:\/\/[^\s|]+/;
+  const found = (address || '').match(urlRe) || (notes || '').match(urlRe);
+  const text = (address || '').replace(/\s*\|?\s*https?:\/\/[^\s|]+/, '').trim();
+  const cleanNotes = (notes || '').replace(/\s*https?:\/\/[^\s|]+/, '').trim();
+  return { text, link: found ? found[0] : '', notes: cleanNotes };
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type':'application/json', ...(token ? { Authorization:'Bearer ' + token } : {}) } });
+  if (r.status === 401 && token) { logout(); throw new Error('401'); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(r.status); e.status = r.status; e.data = data; throw e; }
+  return data;
+}
+
+async function login() {
+  $('err').textContent = '';
+  const btn = $('loginBtn'); btn.disabled = true;
+  try {
+    const d = await api('/staff/login', { method:'POST', body: JSON.stringify({ phone: $('phone').value.trim(), password: $('pass').value }) });
+    token = d.token; user = d.user;
+    localStorage.setItem('staffToken', token); localStorage.setItem('staffUser', JSON.stringify(user));
+    show();
+  } catch (e) {
+    $('err').textContent = e.status === 429 ? 'محاولات كثيرة، حاول بعد 10 دقائق' : 'رقم الجوال أو كلمة المرور غير صحيحة';
+  }
+  btn.disabled = false;
+}
+
+function logout() {
+  token = null; user = null;
+  localStorage.removeItem('staffToken'); localStorage.removeItem('staffUser');
+  $('appView').classList.add('hidden'); $('loginView').classList.remove('hidden'); $('pass').value = '';
+}
+
+function show() {
+  $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden');
+  $('who').textContent = user.full_name;
+  $('roleLbl').textContent = user.role === 'therapist' ? 'معالجة' : 'سائق';
+  $('avatar').innerHTML = user.photo_url
+    ? `<img src="${esc(user.photo_url)}" class="w-14 h-14 rounded-full object-cover" alt="">`
+    : `<div class="w-14 h-14 rounded-full bg-brand text-white grid place-items-center text-xl font-extrabold">${esc(user.full_name[0])}</div>`;
+  loadBookings();
+}
+
+async function loadBookings() {
+  try {
+    const list = await api('/staff/me/bookings');
+    if (!list.length) { $('items').innerHTML = '<div class="text-slate-400 text-center p-10">لا توجد حجوزات معيّنة لك الآن.</div>'; return; }
+    $('items').innerHTML = list.map(b => {
+      const a = splitAddress(b.location_address, b.notes);
+      const act = b.next_status ? ACTION[b.next_status] : null;
+      const phone = String(b.client_phone || '');
+      return `
+      <div class="bg-ink text-white rounded-3xl p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-bold">${esc(b.service_title || 'خدمة مساج')}${b.people_count > 1 ? ' · ' + esc(b.people_count) + ' أشخاص' : ''}</div>
+            <div class="text-sm text-slate-300 mt-1">${esc(b.booking_date)} · ${esc(b.booking_time)}</div>
+          </div>
+          <span class="text-xs bg-white/15 rounded-full px-3 py-1 whitespace-nowrap">${esc(STATUS[b.status] || b.status)}</span>
+        </div>
+        <div class="text-sm mt-3">العميل: ${esc(b.client_name || '-')}</div>
+        <div class="text-sm text-slate-300 mt-1"><i class="fa-solid fa-location-dot ml-1"></i>${esc(a.text || 'غير محدد')}</div>
+        ${a.notes ? `<div class="text-xs text-amber-200 bg-amber-400/10 rounded-lg p-2 mt-2">${esc(a.notes)}</div>` : ''}
+        <div class="flex flex-wrap gap-2 mt-4">
+          ${a.link ? `<a href="${esc(a.link)}" target="_blank" rel="noopener" class="bg-white/15 rounded-full px-4 py-2 text-sm"><i class="fa-solid fa-map-location-dot ml-1"></i>الخريطة</a>` : ''}
+          ${phone ? `<a href="tel:${esc(phone)}" class="bg-white/15 rounded-full px-4 py-2 text-sm"><i class="fa-solid fa-phone ml-1"></i>اتصال</a>` : ''}
+          ${act ? `<button data-id="${esc(b.id)}" data-st="${esc(b.next_status)}" class="act ${act.cls} rounded-full px-5 py-2 text-sm font-extrabold mr-auto">${act.label}</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) { if (e.message !== '401') toast('تعذر تحميل الحجوزات'); }
+}
+
+$('items').addEventListener('click', async e => {
+  const b = e.target.closest('.act'); if (!b) return;
+  b.disabled = true;
+  try {
+    await api('/staff/me/bookings/' + b.dataset.id, { method:'PUT', body: JSON.stringify({ status: b.dataset.st }) });
+    toast('تم التحديث وإشعار العميل');
+  } catch (err) { toast('تعذر تحديث الحالة'); }
+  loadBookings();
+});
+$('loginBtn').addEventListener('click', login);
+$('pass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+$('logout').addEventListener('click', logout);
+$('refresh').addEventListener('click', loadBookings);
+
+if (token && user) show();
+setInterval(() => { if (token) loadBookings(); }, 15000);
+</script>
+</body>
+</html>
