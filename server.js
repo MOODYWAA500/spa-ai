@@ -136,6 +136,28 @@ function initDatabase() {
       await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT');
       await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
 
+      // If users.role is a Postgres ENUM, make sure it accepts 'therapist' and 'driver'
+      try {
+        const r = await client.query(
+          `SELECT format_type(a.atttypid, a.atttypmod) AS typ, t.typtype, 
+                  (SELECT array_agg(e.enumlabel::text) FROM pg_enum e WHERE e.enumtypid = a.atttypid) AS labels
+           FROM pg_attribute a JOIN pg_type t ON t.oid = a.atttypid
+           WHERE a.attrelid = 'users'::regclass AND a.attname = 'role'`
+        );
+        const row = r.rows[0];
+        if (row && row.typtype === 'e') {
+          console.log('ℹ️ users.role enum values:', (row.labels || []).join(', '));
+          for (const v of STAFF_ROLES) {
+            if (!(row.labels || []).includes(v)) {
+              await client.query(`ALTER TYPE ${row.typ} ADD VALUE IF NOT EXISTS '${v}'`);
+              console.log(`✅ Added '${v}' to users.role enum`);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('⚠️ role enum check failed:', e.message);
+      }
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS push_subscriptions (
           endpoint TEXT PRIMARY KEY,
