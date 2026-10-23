@@ -9,6 +9,7 @@ const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const IS_VERCEL = !!process.env.VERCEL;
 
 // ==========================================
 // Keep the server alive on unexpected errors
@@ -21,9 +22,7 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' })); // staff photos arrive as small base64 images
 
 // ==========================================
-// Admin protection (HTTP Basic Auth)
-// Set ADMIN_PASSWORD in the environment (Render -> Environment).
-// Username can be anything.
+// Admin protection (HTTP Basic Auth for API ONLY)
 // ==========================================
 function safeEqual(a, b) {
   const ha = crypto.createHash('sha256').update(String(a)).digest();
@@ -34,34 +33,31 @@ function safeEqual(a, b) {
 function adminAuth(req, res, next) {
   const pass = process.env.ADMIN_PASSWORD;
   if (!pass) {
-    return res.status(500).send('ADMIN_PASSWORD is not set on the server');
+    return res.status(500).json({ error: 'ADMIN_PASSWORD is not set on the server' });
   }
   const b64 = (req.headers.authorization || '').split(' ')[1] || '';
   const decoded = Buffer.from(b64, 'base64').toString();
   const idx = decoded.indexOf(':');
   const given = idx >= 0 ? decoded.slice(idx + 1) : '';
   if (given && safeEqual(given, pass)) return next();
-  res.set('WWW-Authenticate', 'Basic realm="Admin", charset="UTF-8"');
-  res.status(401).send('Authentication required');
+  res.status(401).json({ error: 'Authentication required' });
 }
 
-// These must come BEFORE express.static so admin routes are protected
-app.use('/admin', adminAuth);
-app.use('/admin.html', adminAuth);
+// Protect admin API routes only; static pages stay public (the page shows its own login form)
 app.use('/api/admin', adminAuth);
 
 // ==========================================
-// SERVE STATIC FILES FROM CURRENT DIRECTORY
+// Static files
 // ==========================================
-app.use(express.static(path.join(__dirname, './'), { index: false }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// PostgreSQL connection setup using process.env.DATABASE_URL
+// ==========================================
+// PostgreSQL (Neon)
+// ==========================================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false // Required for Neon PostgreSQL
-  },
-  max: 5,
+  ssl: { rejectUnauthorized: false }, // Required for Neon
+  max: IS_VERCEL ? 1 : 5,             // serverless: keep connections low
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 10000,
   keepAlive: true
@@ -90,41 +86,96 @@ const PAYMENT_MESSAGES = {
   refunded: 'تم استرجاع المبلغ'
 };
 
-async function initDatabase() {
-  const client = await pool.connect();
-  try {
-    console.log('✅ Connected to Neon PostgreSQL database.');
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS booking_notifications (
-        id SERIAL PRIMARY KEY,
-        booking_id UUID NOT NULL,
-        title TEXT NOT NULL,
-        message TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT now()
-      )
-    `);
-    await client.query(
-      'CREATE INDEX IF NOT EXISTS idx_booking_notifications_booking ON booking_notifications (booking_id)'
-    );
-    console.log('✅ "booking_notifications" table verified.');
+let dbReady = null;
+function initDatabase() {
+  if (dbReady) return dbReady;
+  dbReady = (async () => {
+    const client = await pool.connect();
+    try {
+      console.log('✅ Connected to Neon PostgreSQL database.');
 
-    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT');
-    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
-    console.log('✅ "users" staff columns verified.');
-  } finally {
-    client.release();
-  }
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS booking_notifications (
+          id SERIAL PRIMARY KEY,
+          booking_id UUID NOT NULL,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT now()
+        )
+      `);
+      await client.query(
+        'CREATE INDEX IF NOT EXISTS idx_booking_notifications_booking ON booking_notifications (booking_id)'
+      );
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS app_settings (
+          key TEXT PRIMARY KEY,
+          value JSONB NOT NULL
+        )
+      `);
+
+      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT');
+      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
+      console.log('✅ Database schema verified.');
+    } finally {
+      client.release();
+    }
+  })().catch((err) => {
+    console.error('❌ Error initializing database:', err.message);
+    dbReady = null; // allow retry on next request
+  });
+  return dbReady;
 }
-initDatabase().catch((err) => console.error('❌ Error initializing database:', err.message));
+initDatabase();
 
 // ==========================================
-// API ENDPOINTS
+// HEALTH
 // ==========================================
-
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    env: {
+      ADMIN_PASSWORD: !!process.env.ADMIN_PASSWORD,
+      DATABASE_URL: !!process.env.DATABASE_URL,
+      JWT_SECRET: !!process.env.JWT_SECRET
+    }
+  });
 });
 
+// ==========================================
+// BANK DETAILS & APP SETTINGS
+// ==========================================
+app.get('/api/admin/settings', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT value FROM app_settings WHERE key = 'bank_details'");
+    if (result.rows.length === 0) return res.json({});
+    res.json(result.rows[0].value);
+  } catch (error) {
+    console.error('❌ Error fetching settings:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/admin/settings', async (req, res) => {
+  try {
+    const bankDetails = req.body || {};
+    await pool.query(
+      `INSERT INTO app_settings (key, value)
+       VALUES ('bank_details', $1::jsonb)
+       ON CONFLICT (key) DO UPDATE SET value = $1::jsonb`,
+      [JSON.stringify(bankDetails)]
+    );
+    res.json({ success: true, message: 'Bank settings saved successfully' });
+  } catch (error) {
+    console.error('❌ Error saving settings:', error);
+    res.status(500).json({ error: 'Could not save bank settings' });
+  }
+});
+
+// ==========================================
+// PUBLIC API
+// ==========================================
 app.get('/api/services', async (req, res) => {
   try {
     const result = await pool.query(
@@ -201,9 +252,7 @@ app.post('/api/bookings', async (req, res) => {
     console.error('❌ Error creating booking:', error);
     res.status(500).json({
       success: false,
-      error: process.env.NODE_ENV === 'production'
-        ? 'Database error while creating booking'
-        : 'Database error: ' + error.message,
+      error: 'Database error while creating booking',
       detail: error.message
     });
   } finally {
@@ -211,10 +260,14 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
+// ==========================================
+// ADMIN: STAFF
+// ==========================================
 app.get('/api/admin/staff', async (req, res) => {
   try {
+    // "name" is returned as an alias of full_name so both field names work in the admin page
     const result = await pool.query(
-      `SELECT id, full_name, phone, role::text AS role, photo_url
+      `SELECT id, full_name, full_name AS name, phone, role::text AS role, photo_url
        FROM users
        WHERE role::text IN ('therapist', 'driver')
        ORDER BY full_name`
@@ -229,17 +282,23 @@ app.get('/api/admin/staff', async (req, res) => {
 app.post('/api/admin/staff', async (req, res) => {
   const b = req.body || {};
   const role = String(b.role || '');
-  const fullName = String(b.full_name || '').trim();
+  const fullName = String(b.full_name || b.name || '').trim();
   const phone = String(b.phone || '').trim();
   const password = String(b.password || '');
-  const photo = b.photo ? String(b.photo) : null;
+
+  // accept "photo" or "photo_url"; ignore the 1x1 placeholder gif the admin page may send
+  let photo = b.photo || b.photo_url || null;
+  if (photo && String(photo).startsWith('data:image/gif')) photo = null;
+  photo = photo ? String(photo) : null;
 
   if (!STAFF_ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role' });
   if (fullName.length < 2 || fullName.length > 100) return res.status(400).json({ error: 'Invalid name' });
   if (!/^\+?\d{9,15}$/.test(phone)) return res.status(400).json({ error: 'Invalid phone' });
-  if (password.length < 8 || Buffer.byteLength(password) > 72) return res.status(400).json({ error: 'Invalid password' });
+  if (password.length < 8 || Buffer.byteLength(password) > 72) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
   if (photo && (!/^data:image\/(jpeg|png|webp);base64,/.test(photo) || photo.length > 400000)) {
-    return res.status(400).json({ error: 'Invalid photo' });
+    return res.status(400).json({ error: 'Invalid photo (jpeg/png/webp, max ~300KB)' });
   }
 
   try {
@@ -253,7 +312,7 @@ app.post('/api/admin/staff', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (full_name, phone, role, password_hash, photo_url)
        VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, full_name, phone, role::text AS role, photo_url`,
+       RETURNING id, full_name, full_name AS name, phone, role::text AS role, photo_url`,
       [fullName, phone, role, hash, photo]
     );
     res.status(201).json(result.rows[0]);
@@ -264,6 +323,35 @@ app.post('/api/admin/staff', async (req, res) => {
   }
 });
 
+app.delete('/api/admin/staff/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid id' });
+
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    // detach from bookings first so the foreign keys don't block the delete
+    await db.query('UPDATE bookings SET therapist_id = NULL WHERE therapist_id = $1', [id]);
+    await db.query('UPDATE bookings SET driver_id = NULL WHERE driver_id = $1', [id]);
+    const del = await db.query(
+      `DELETE FROM users WHERE id = $1 AND role::text IN ('therapist', 'driver')`,
+      [id]
+    );
+    await db.query('COMMIT');
+    if (del.rowCount === 0) return res.status(404).json({ error: 'Account not found' });
+    res.json({ success: true });
+  } catch (error) {
+    await db.query('ROLLBACK').catch(() => {});
+    console.error('❌ Error deleting staff:', error);
+    res.status(500).json({ error: 'Could not delete the account', detail: error.message });
+  } finally {
+    db.release();
+  }
+});
+
+// ==========================================
+// ADMIN: BOOKINGS
+// ==========================================
 app.get('/api/admin/bookings', async (req, res) => {
   try {
     const query = `
@@ -300,7 +388,7 @@ app.get('/api/admin/bookings', async (req, res) => {
   }
 });
 
-app.put('/api/admin/bookings/:id/assign', async (req, res) => {
+async function updateBooking(req, res) {
   const { id } = req.params;
   const body = req.body || {};
   const therapistId = body.therapist_id ? String(body.therapist_id).toLowerCase() : null;
@@ -384,47 +472,21 @@ app.put('/api/admin/bookings/:id/assign', async (req, res) => {
     res.json({ success: true, notified, message: lines.join(' • ') });
   } catch (error) {
     await db.query('ROLLBACK').catch(() => {});
-    console.error('❌ Error assigning booking:', error);
+    console.error('❌ Error updating booking:', error);
     const code = error.code === '22P02' ? 400 : 500;
     res.status(code).json({ success: false, error: 'Could not update the booking', detail: error.message });
   } finally {
     db.release();
   }
-});
+}
 
-app.patch('/api/admin/bookings/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    if (!status) {
-      return res.status(400).json({ error: 'Status is required' });
-    }
-
-    const result = await pool.query(
-      'UPDATE bookings SET status = $1::booking_status WHERE id = $2 RETURNING id, status::text AS status',
-      [status, id]
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Booking not found' });
-    }
-
-    res.json({
-      message: 'Booking status updated successfully',
-      booking: result.rows[0]
-    });
-  } catch (error) {
-    console.error('❌ Error updating booking status:', error);
-    const code = error.code === '22P02' ? 400 : 500;
-    res.status(code).json({ error: 'Could not update status', detail: error.message });
-  }
-});
+// Both URLs work: the admin page uses PUT /bookings/:id, older code used /bookings/:id/assign
+app.put('/api/admin/bookings/:id', updateBooking);
+app.put('/api/admin/bookings/:id/assign', updateBooking);
 
 // ==========================================
-// STAFF SYSTEM
+// STAFF PORTAL & LOGIN
 // ==========================================
-
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 const loginFails = new Map();
 
@@ -552,6 +614,9 @@ app.put('/api/staff/me/bookings/:id', requireStaff, async (req, res) => {
   }
 });
 
+// ==========================================
+// CLIENT SYNC
+// ==========================================
 app.post('/api/client/sync', async (req, res) => {
   try {
     const raw = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
@@ -587,19 +652,32 @@ app.post('/api/client/sync', async (req, res) => {
 // ==========================================
 // FRONTEND PAGE ROUTES
 // ==========================================
-
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/admin', (req, res) => {
+app.get(['/admin', '/admin/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// Unknown /api routes get JSON 404 instead of the home page
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'API route not found' });
 });
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-// Start Server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
-});
+
+// ==========================================
+// START
+// Local / Fly.io / Docker: listen on a port.
+// Vercel: export the app (no listen).
+// ==========================================
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server listening on port ${PORT}`);
+  });
+}
+
+module.exports = app;

@@ -12,26 +12,56 @@
     tailwind.config = {
       theme: { extend: {
         fontFamily: { sans: ['Tajawal', 'system-ui', 'sans-serif'] },
-        colors: { brand: '#5b4cf0', ink: '#14162a', panel: '#1c1e33' }
+        colors: { brand: '#5b4cf0', ink: '#14162a', panel: '#1c1e33', saffron: { 500: '#ed8936', 600: '#dd6b20' } }
       } }
     }
   </script>
 
   <style>
     body { font-family: 'Tajawal', sans-serif; background-color: #ecebfa; color: #1e293b; }
-    .glass { background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16); }
-    .navbtn { display:flex; align-items:center; gap:.75rem; padding:.75rem 1rem; border-radius:1rem; font-size:.9rem; font-weight:700; text-align:start; white-space:nowrap; color:#c5c8e6; transition:background .15s,color .15s; }
+    .glass { background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(12px); }
+    .navbtn { display:flex; align-items:center; gap:.75rem; padding:.75rem 1rem; border-radius:1rem; font-size:.9rem; font-weight:700; text-align:start; white-space:nowrap; color:#c5c8e6; transition:background .15s,color .15s; width:100%; cursor:pointer; background:transparent; border:none; }
     .navbtn:hover { background: rgba(255,255,255,.08); color:#fff; }
     .navbtn.active { background:#5b4cf0; color:#fff; }
     .navbtn i { width:1.25rem; text-align:center; }
-    @media (min-width:1024px) { .navbtn { width:100%; } }
-    .navbtn:focus-visible, aside a:focus-visible, aside button:focus-visible { outline:2px solid #fff; outline-offset:2px; }
     .field-dark { background: rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); color:#fff; border-radius:14px; padding:.65rem .9rem; width:100%; outline:none; }
     .field-dark:focus { border-color:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.2); }
+    .field-light { background: #fff; border: 1px solid #cbd5e1; color: #1e293b; border-radius: 12px; padding: 0.65rem 0.9rem; width: 100%; outline: none; }
+    .field-light:focus { border-color: #5b4cf0; box-shadow: 0 0 0 3px rgba(91, 76, 240, 0.15); }
+    @media screen and (max-width: 768px) { input, select, textarea { font-size: 16px !important; } }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   </style>
 </head>
 <body class="p-3 md:p-6 min-h-screen">
+
+<!-- ============ Admin Login Overlay ============ -->
+<div id="adminLoginOverlay" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-ink text-white rounded-[32px] p-6 md:p-8 shadow-2xl space-y-6 border border-white/10">
+    <div class="text-center space-y-2">
+      <div class="w-16 h-16 mx-auto rounded-3xl bg-brand flex items-center justify-center text-2xl shadow-lg shadow-brand/30">
+        <i class="fa-solid fa-lock text-white"></i>
+      </div>
+      <h2 class="text-2xl font-extrabold">تسجيل دخول الإدارة</h2>
+      <p class="text-xs text-slate-400">أدخل كلمة مرور الأدمن للوصول إلى لوحة التحكم</p>
+    </div>
+
+    <form onsubmit="event.preventDefault(); doAdminLogin()" class="space-y-4">
+      <div>
+        <label class="block text-xs font-bold text-slate-300 mb-1.5">كلمة المرور</label>
+        <div class="relative">
+          <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"><i class="fa-solid fa-key"></i></span>
+          <input id="adminLoginPass" type="password" dir="ltr" required placeholder="••••••••" class="field-dark pr-11 pl-11 text-left font-bold">
+        </div>
+      </div>
+
+      <div id="adminLoginErr" class="hidden text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 p-3 rounded-xl text-center"></div>
+
+      <button id="adminLoginBtn" type="submit" class="w-full bg-brand hover:opacity-90 text-white font-extrabold rounded-2xl py-3.5 transition shadow-lg shadow-brand/30">
+        دخول لوحة التحكم
+      </button>
+    </form>
+  </div>
+</div>
 
 <div class="max-w-[1400px] mx-auto flex flex-col lg:flex-row gap-4">
 
@@ -46,29 +76,33 @@
     </div>
 
     <nav class="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible">
-      <button data-view="bookings" class="navbtn active">
+      <button data-view="bookings" onclick="setView('bookings')" class="navbtn active">
         <i class="fa-regular fa-calendar-check"></i>
         <span class="flex-1">الحجوزات</span>
         <span id="navPending" class="hidden bg-rose-500 text-white text-xs rounded-full min-w-[1.4rem] h-6 px-1.5 grid place-items-center"></span>
       </button>
-      <button data-view="clients" class="navbtn">
+      <button data-view="clients" onclick="setView('clients')" class="navbtn">
         <i class="fa-solid fa-users"></i>
         <span class="flex-1">العملاء</span>
       </button>
-      <button data-view="therapist" class="navbtn">
+      <button data-view="therapist" onclick="setView('therapist')" class="navbtn">
         <i class="fa-solid fa-spa"></i>
         <span class="flex-1">المعالجات</span>
       </button>
-      <button data-view="driver" class="navbtn">
+      <button data-view="driver" onclick="setView('driver')" class="navbtn">
         <i class="fa-solid fa-car-side"></i>
         <span class="flex-1">السائقون</span>
       </button>
+      <button data-view="settings" onclick="setView('settings')" class="navbtn">
+        <i class="fa-solid fa-building-columns"></i>
+        <span class="flex-1">بيانات الدفع</span>
+      </button>
     </nav>
 
-    <div class="lg:mt-auto flex lg:flex-col gap-2">
-      <a href="staff.html" target="_blank" class="flex-1 glass rounded-2xl px-4 py-2.5 text-sm text-center hover:bg-white/20">
-        <i class="fa-solid fa-right-to-bracket ml-1"></i> صفحة دخول الموظفين
-      </a>
+    <div class="lg:mt-auto flex lg:flex-col gap-2 pt-4 border-t border-white/10">
+      <button onclick="adminLogout()" class="w-full glass rounded-2xl px-4 py-2.5 text-xs font-bold text-center hover:bg-white/20 transition text-rose-300">
+        <i class="fa-solid fa-right-from-bracket ml-1"></i> تسجيل الخروج
+      </button>
     </div>
   </aside>
 
@@ -101,7 +135,7 @@
           <i class="fa-solid fa-rotate ml-1"></i> تحديث
         </button>
 
-        <button id="addStaffBtn" class="hidden bg-brand hover:opacity-90 text-white text-sm font-bold px-5 py-2.5 rounded-full transition"></button>
+        <button id="addStaffBtn" onclick="openStaffModal()" class="hidden bg-brand hover:opacity-90 text-white text-sm font-bold px-5 py-2.5 rounded-full transition"></button>
       </div>
     </div>
 
@@ -177,9 +211,43 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" id="adminClientsGrid"></div>
     </section>
 
-    <!-- ===== View: staff (therapists / drivers) ===== -->
+    <!-- ===== View: staff ===== -->
     <section id="view-staff" class="hidden">
       <div id="staffGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+    </section>
+
+    <!-- ===== View: settings ===== -->
+    <section id="view-settings" class="hidden max-w-2xl space-y-5">
+      <div class="bg-white border border-slate-200 rounded-3xl p-6 space-y-4 shadow-sm">
+        <h2 class="font-extrabold text-slate-900 flex items-center gap-2 text-lg">
+          <i class="fa-solid fa-building-columns text-brand"></i> بيانات الحساب البنكي للفواتير
+        </h2>
+        <p class="text-xs text-slate-500">تُحفظ مرة واحدة وتُضاف تلقائياً في فاتورة الواتساب التي تُرسل للعملاء من زر «إجراء».</p>
+        
+        <div class="grid sm:grid-cols-2 gap-3">
+          <label class="text-xs font-bold text-slate-700">اسم البنك
+            <input id="setBank" oninput="renderPreview()" class="field-light mt-1" placeholder="مثال: بنك الراجحي">
+          </label>
+          <label class="text-xs font-bold text-slate-700">اسم صاحب الحساب
+            <input id="setHolder" oninput="renderPreview()" class="field-light mt-1" placeholder="الاسم كما في الحساب">
+          </label>
+        </div>
+
+        <label class="block text-xs font-bold text-slate-700">رقم الآيبان (IBAN)
+          <input id="setIban" oninput="renderPreview()" dir="ltr" class="field-light mt-1 tracking-wider font-bold" placeholder="SA00 0000 0000 0000 0000 0000">
+        </label>
+
+        <label class="block text-xs font-bold text-slate-700">ملاحظة تُضاف أسفل الفاتورة (اختياري)
+          <input id="setNote" oninput="renderPreview()" class="field-light mt-1" placeholder="مثال: يرجى إرسال إيصال التحويل لتأكيد الحجز">
+        </label>
+
+        <button type="button" onclick="saveSettings()" class="bg-brand hover:opacity-90 text-white font-extrabold rounded-full px-7 py-3 shadow-md transition">حفظ بيانات الدفع</button>
+      </div>
+
+      <div class="bg-ink text-white rounded-3xl p-5 space-y-2 shadow-lg">
+        <p class="text-xs font-bold text-indigo-300">معاينة نص الفاتورة عبر واتساب</p>
+        <pre id="invoicePreview" class="text-xs whitespace-pre-wrap leading-relaxed font-sans bg-black/20 p-4 rounded-2xl"></pre>
+      </div>
     </section>
   </main>
 </div>
@@ -212,7 +280,7 @@
       <img id="photoPreview" class="w-20 h-20 rounded-full object-cover bg-white/15" alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
       <label class="glass rounded-full px-4 py-2 text-sm cursor-pointer hover:bg-white/20">
         <i class="fa-regular fa-image ml-1"></i> اختيار صورة
-        <input id="photoInput" type="file" accept="image/*" class="hidden">
+        <input id="photoInput" type="file" accept="image/*" class="hidden" onchange="handlePhotoSelect(event)">
       </label>
     </div>
 
@@ -227,20 +295,19 @@
         <label for="sPass">كلمة المرور</label>
         <div class="flex gap-2 mt-1.5">
           <input id="sPass" type="text" class="field-dark" dir="ltr" autocomplete="new-password">
-          <button id="genPass" type="button" class="glass rounded-2xl px-4 text-sm whitespace-nowrap hover:bg-white/20">توليد</button>
+          <button id="genPassBtn" type="button" onclick="document.getElementById('sPass').value = genPass()" class="glass rounded-2xl px-4 text-sm whitespace-nowrap hover:bg-white/20">توليد</button>
         </div>
         <span class="text-xs text-slate-400">8 أحرف على الأقل. سلّمها للموظف، ولن تظهر مرة أخرى.</span>
       </div>
     </div>
 
-    <button id="saveStaff" class="bg-white text-ink font-extrabold rounded-full px-7 py-3 w-full mt-6 hover:bg-slate-100 disabled:opacity-60">حفظ الحساب</button>
+    <button id="saveStaff" onclick="saveStaff()" class="bg-white text-ink font-extrabold rounded-full px-7 py-3 w-full mt-6 hover:bg-slate-100 disabled:opacity-60 transition">حفظ الحساب</button>
   </div>
 </div>
 
 <div id="toast" class="hidden"></div>
 
 <script>
-  // Same address as the page when served by the Node server; localhost:5000 when opened elsewhere (Live Server, file)
   const isLocal = ['localhost', '127.0.0.1', ''].includes(location.hostname);
   const API_BASE_URL = (location.protocol === 'file:' || (isLocal && location.port !== '5000')) ? 'http://localhost:5000/api' : '/api';
 
@@ -251,6 +318,7 @@
   let modalPayment = 'unpaid';
   let currentView = 'bookings';
   let photoData = null;
+  let currentBankSettings = {};
 
   const STATUSES = [
     { value: 'pending',     label: 'قيد الانتظار' },
@@ -263,12 +331,10 @@
   ];
   const ACTIVE_STATUSES = ['assigned', 'on_the_way', 'arrived', 'in_progress'];
   const PAYMENT_LABELS = { unpaid: 'غير مدفوع', paid: 'مدفوع', refunded: 'مسترجع' };
-  const ROLE_LABEL = { therapist: 'معالجة', driver: 'سائق' };
   const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
   const $ = (id) => document.getElementById(id);
 
-  // Escape text before inserting it into HTML (client names, addresses, etc. are user input)
   function esc(text) {
     return String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
@@ -300,21 +366,134 @@
     toast.timer = setTimeout(() => el.classList.add('hidden'), 4000);
   }
 
-  // The server protects /admin and /api/admin with Basic Auth (ADMIN_PASSWORD).
-  // The browser already has the password from opening this page, so a plain fetch is enough.
   function adminFetch(url, opts = {}) {
-    return fetch(url, { credentials: 'same-origin', ...opts });
+    const token = sessionStorage.getItem('admin_auth');
+    const headers = { ...(opts.headers || {}) };
+    if (token) {
+      headers['Authorization'] = 'Basic ' + token;
+    }
+    return fetch(url, { ...opts, headers });
   }
 
-  /* ================= جلب البيانات ================= */
+  async function doAdminLogin() {
+    const pass = $('adminLoginPass').value;
+    const errBox = $('adminLoginErr');
+    const btn = $('adminLoginBtn');
+
+    errBox.classList.add('hidden');
+    btn.disabled = true;
+    btn.textContent = 'جاري التحقق...';
+
+    const credentials = btoa('admin:' + pass);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/bookings`, {
+        headers: { 'Authorization': 'Basic ' + credentials }
+      });
+
+      if (!res.ok) throw new Error('كلمة المرور غير صحيحة');
+
+      sessionStorage.setItem('admin_auth', credentials);
+      $('adminLoginOverlay').classList.add('hidden');
+      fetchServerData();
+    } catch (e) {
+      errBox.textContent = e.message;
+      errBox.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'دخول لوحة التحكم';
+    }
+  }
+
+  function adminLogout() {
+    sessionStorage.removeItem('admin_auth');
+    $('adminLoginPass').value = '';
+    $('adminLoginOverlay').classList.remove('hidden');
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const token = sessionStorage.getItem('admin_auth');
+    if (token) {
+      $('adminLoginOverlay').classList.add('hidden');
+      fetchServerData();
+    } else {
+      $('adminLoginOverlay').classList.remove('hidden');
+    }
+  });
+
+  async function loadSettingsForm() {
+    try {
+      const res = await adminFetch(`${API_BASE_URL}/admin/settings`);
+      if (res.ok) {
+        const settings = await res.json();
+        currentBankSettings = settings || {};
+        $('setBank').value = settings.bank_name || '';
+        $('setHolder').value = settings.account_holder || '';
+        $('setIban').value = settings.iban || '';
+        $('setNote').value = settings.note || '';
+        renderPreview();
+      } else if (res.status === 401) {
+        adminLogout();
+      }
+    } catch (e) {
+      console.error('Error loading settings', e);
+    }
+  }
+
+  function renderPreview() {
+    const bank = $('setBank').value || 'اسم البنك';
+    const holder = $('setHolder').value || 'اسم صاحب الحساب';
+    const iban = $('setIban').value || 'SA00 0000 0000 0000 0000 0000';
+    const note = $('setNote').value || '';
+
+    const text = `🧾 *فاتورة ودفع حساب*
+--------------------------------
+🏛️ البنك: ${bank}
+👤 اسم الحساب: ${holder}
+💳 IBAN: ${iban}
+--------------------------------
+${note ? '📌 ' + note : ''}`;
+
+    $('invoicePreview').textContent = text;
+  }
+
+  async function saveSettings() {
+    const body = {
+      bank_name: $('setBank').value.trim(),
+      account_holder: $('setHolder').value.trim(),
+      iban: $('setIban').value.trim(),
+      note: $('setNote').value.trim()
+    };
+
+    try {
+      const res = await adminFetch(`${API_BASE_URL}/admin/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        currentBankSettings = body;
+        toast('✅ تم حفظ بيانات الحساب البنكي بنجاح');
+      } else if (res.status === 401) {
+        adminLogout();
+      } else {
+        toast('تعذر حفظ بيانات البنك', false);
+      }
+    } catch (e) {
+      toast('خطأ في الاتصال بالسيرفر', false);
+    }
+  }
 
   async function fetchServerData() {
     try {
       const response = await adminFetch(`${API_BASE_URL}/admin/bookings`);
+      if (response.status === 401) {
+        adminLogout();
+        return;
+      }
       if (!response.ok) throw new Error('فشل الاتصال بـ API');
       allServerBookings = await response.json();
 
-      // Staff list (therapists / drivers)
       try {
         const staffRes = await adminFetch(`${API_BASE_URL}/admin/staff`);
         if (staffRes.ok) staffMembers = await staffRes.json();
@@ -338,7 +517,6 @@
     if (filterValue === 'today') {
       displayedBookings = allServerBookings.filter(b => {
         const createdDateStr = toLocalDateString(b.created_at);
-        // booking_date arrives as YYYY-MM-DD from the server
         return createdDateStr === todayStr || b.booking_date === todayStr;
       });
       $('tableTitle').innerText = 'جدول الحجوزات (اليوم)';
@@ -356,32 +534,39 @@
     renderAdminDashboard();
   }
 
-  /* ================= التنقل بين الصفحات ================= */
-
   function setView(v) {
     currentView = v;
     document.querySelectorAll('.navbtn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
 
     const isStaff = v === 'therapist' || v === 'driver';
+    const isSettings = v === 'settings';
+
     $('view-bookings').classList.toggle('hidden', v !== 'bookings');
     $('view-clients').classList.toggle('hidden', v !== 'clients');
     $('view-staff').classList.toggle('hidden', !isStaff);
-    $('filterBox').classList.toggle('hidden', isStaff);
+    $('view-settings').classList.toggle('hidden', !isSettings);
+
+    $('filterBox').classList.toggle('hidden', isStaff || isSettings);
     $('addStaffBtn').classList.toggle('hidden', !isStaff);
 
     const titles = {
       bookings:  ['الحجوزات', 'تابع الحجوزات، وعيّن المعالجة والسائق، وغيّر الحالة من مكان واحد.'],
       clients:   ['العملاء', 'العملاء المسجلون وعدد حجوزاتهم وإجمالي إنفاقهم.'],
       therapist: ['المعالجات', 'أنشئ حسابًا بالاسم والصورة وكلمة المرور لتدخل المعالجة من نظامها.'],
-      driver:    ['السائقون', 'أنشئ حسابًا بالاسم والصورة وكلمة المرور ليدخل السائق من نظامه.']
+      driver:    ['السائقون', 'أنشئ حسابًا بالاسم والصورة وكلمة المرور ليدخل السائق من نظامه.'],
+      settings:  ['بيانات الدفع', 'أضف الآيبان مرة واحدة ليُرسل مع كل فاتورة واتساب.']
     };
     $('pageTitle').textContent = titles[v][0];
     $('pageSub').textContent = titles[v][1];
-    if (isStaff) $('addStaffBtn').innerHTML = `<i class="fa-solid fa-plus ml-1"></i> ${v === 'therapist' ? 'إضافة معالجة' : 'إضافة سائق'}`;
-    if (isStaff) renderStaff();
-  }
 
-  /* ================= الرسم ================= */
+    if (isStaff) {
+      $('addStaffBtn').innerHTML = `<i class="fa-solid fa-plus ml-1"></i> ${v === 'therapist' ? 'إضافة معالجة' : 'إضافة سائق'}`;
+      renderStaff();
+    }
+    if (isSettings) {
+      loadSettingsForm();
+    }
+  }
 
   function renderAdminDashboard() {
     const totalRevenue = displayedBookings.reduce((acc, b) => acc + parseFloat(b.service_price || 0), 0);
@@ -457,85 +642,46 @@
         <div class="flex-1 min-w-0">
           <h4 class="text-sm font-bold truncate">${esc(c.name)}</h4>
           <p class="text-[11px] text-slate-400" dir="ltr" style="text-align:right">${esc(c.phone)}</p>
-          <span class="inline-block bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full mt-1">${c.count} حجز</span>
+          <div class="mt-2 flex gap-2 text-[10px]">
+            <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-bold">حجوزات: ${c.count}</span>
+            <span class="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md font-bold">إجمالي: ${c.totalSpent} ر.س</span>
+          </div>
         </div>
-        <div class="text-left shrink-0">
-          <p class="text-[10px] text-slate-400">إجمالي الإنفاق</p>
-          <p class="text-sm font-extrabold text-emerald-600">${c.totalSpent} ر.س</p>
-        </div>
-      </div>`).join('');
+      </div>
+    `).join('');
   }
-
-  function filterAdminBookings() {
-    const query = $('adminSearchInput').value.toLowerCase();
-    const filtered = displayedBookings.filter(b =>
-      (b.client_name && b.client_name.toLowerCase().includes(query)) ||
-      (b.client_phone && b.client_phone.includes(query)) ||
-      (b.id && String(b.id).toLowerCase().includes(query))
-    );
-    renderAdminBookingsTable(filtered);
-  }
-
-  /* ================= المعالجات والسائقون ================= */
 
   function renderStaff() {
-    const role = currentView;
-    const list = staffMembers.filter(s => s.role === role);
     const grid = $('staffGrid');
+    const role = currentView;
+    const members = staffMembers.filter(s => s.role === role);
 
-    if (!list.length) {
-      grid.innerHTML = `<div class="text-slate-400 p-10 text-center sm:col-span-2 xl:col-span-3">لا توجد ${role === 'therapist' ? 'معالجات' : 'سائقون'} بعد. اضغط "إضافة" لإنشاء أول حساب.</div>`;
+    if (members.length === 0) {
+      grid.innerHTML = `<p class="text-sm text-slate-400 sm:col-span-2 xl:col-span-3 p-8 text-center">لا يوجد ${role === 'therapist' ? 'معالجون' : 'سائقون'} مسجلون حالياً.</p>`;
       return;
     }
 
-    const key = role === 'therapist' ? 'therapist_id' : 'driver_id';
-    grid.innerHTML = list.map(s => {
-      const active = allServerBookings.filter(b => String(b[key]) === String(s.id) && ACTIVE_STATUSES.includes(b.status)).length;
-      const img = s.photo_url
-        ? `<img src="${esc(s.photo_url)}" class="w-16 h-16 rounded-full object-cover shrink-0" alt="">`
-        : `<div class="w-16 h-16 rounded-full bg-brand/10 text-brand grid place-items-center text-xl font-extrabold shrink-0">${esc((s.full_name || '?')[0])}</div>`;
-      return `
-        <div class="bg-white border border-slate-100 rounded-3xl p-5 flex items-center gap-4">
-          ${img}
-          <div class="flex-1 min-w-0">
-            <div class="font-bold truncate">${esc(s.full_name)}</div>
-            <div class="text-sm text-slate-500" dir="ltr" style="text-align:right">${esc(s.phone || '')}</div>
-            <div class="text-xs text-brand mt-1">${active} حجز نشط</div>
-          </div>
-        </div>`;
-    }).join('');
-  }
-
-  // Shrink the picked photo to 256px square so it stays light
-  function resizeImage(file) {
-    return new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onerror = reject;
-      fr.onload = () => {
-        const img = new Image();
-        img.onerror = reject;
-        img.onload = () => {
-          const size = 256, c = document.createElement('canvas');
-          c.width = c.height = size;
-          const m = Math.min(img.width, img.height);
-          c.getContext('2d').drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, size, size);
-          resolve(c.toDataURL('image/jpeg', 0.85));
-        };
-        img.src = fr.result;
-      };
-      fr.readAsDataURL(file);
-    });
+    grid.innerHTML = members.map(m => `
+      <div class="bg-white border border-slate-100 rounded-3xl p-5 flex items-center gap-4">
+        <img src="${esc(m.photo_url || BLANK)}" class="w-16 h-16 rounded-2xl object-cover bg-slate-100 shrink-0">
+        <div class="flex-1 min-w-0">
+          <h4 class="text-sm font-bold text-slate-900 truncate">${esc(m.name)}</h4>
+          <p class="text-xs text-slate-400 mt-0.5" dir="ltr" style="text-align:right">${esc(m.phone)}</p>
+        </div>
+        <button onclick="deleteStaff('${esc(m.id)}')" class="text-rose-500 hover:text-rose-700 p-2 text-sm" title="حذف الحساب"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    `).join('');
   }
 
   function openStaffModal() {
+    $('staffModalTitle').textContent = currentView === 'therapist' ? 'إضافة معالجة جديدة' : 'إضافة سائق جديد';
+    $('sName').value = '';
+    $('sPhone').value = '';
+    $('sPass').value = genPass();
     photoData = null;
-    ['sName', 'sPhone', 'sPass'].forEach(i => $(i).value = '');
     $('photoPreview').src = BLANK;
-    $('photoInput').value = '';
-    $('staffModalTitle').textContent = currentView === 'therapist' ? 'إضافة معالجة' : 'إضافة سائق';
     $('staffModal').classList.remove('hidden');
     $('staffModal').classList.add('flex');
-    $('sName').focus();
   }
 
   function closeStaffModal() {
@@ -544,238 +690,192 @@
   }
 
   function genPass() {
-    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    return [...crypto.getRandomValues(new Uint32Array(10))].map(x => chars[x % chars.length]).join('');
+    return Math.random().toString(36).slice(-8);
+  }
+
+  function handlePhotoSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      photoData = e.target.result;
+      $('photoPreview').src = photoData;
+    };
+    reader.readAsDataURL(file);
   }
 
   async function saveStaff() {
-    const body = {
-      role: currentView,
-      full_name: $('sName').value.trim(),
-      phone: $('sPhone').value.trim(),
-      password: $('sPass').value,
-      photo: photoData
-    };
-    if (!body.full_name) return toast('اكتب اسم الموظف', false);
-    if (!/^\+?\d{9,15}$/.test(body.phone)) return toast('رقم الجوال غير صحيح', false);
-    if (body.password.length < 8) return toast('كلمة المرور يجب أن تكون 8 أحرف على الأقل', false);
+    const name = $('sName').value.trim();
+    const phone = $('sPhone').value.trim();
+    const password = $('sPass').value.trim();
 
-    const btn = $('saveStaff');
-    btn.disabled = true; btn.textContent = 'جارٍ الحفظ...';
+    if (!name || !phone || !password) {
+      toast('يرجى تعبئة جميع الحقول', false);
+      return;
+    }
+
+    const payload = {
+      role: currentView,
+      name,
+      phone,
+      password,
+      photo_url: photoData || BLANK
+    };
+
     try {
       const res = await adminFetch(`${API_BASE_URL}/admin/staff`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(payload)
       });
-      if (res.status === 409) { toast('رقم الجوال مسجل مسبقًا', false); }
-      else if (!res.ok) { toast('تعذر إنشاء الحساب', false); }
-      else {
-        const created = await res.json();
-        staffMembers.push({ ...created, role: body.role });
-        renderStaff();
+      if (res.ok) {
+        toast('✅ تم إضافة الحساب بنجاح');
         closeStaffModal();
-        toast('✅ تم إنشاء الحساب. يدخل الموظف برقم جواله وكلمة المرور');
+        fetchServerData();
+      } else {
+        const err = await res.json();
+        toast(err.error || 'تعذر حفظ الحساب', false);
       }
-    } catch (e) {
-      console.error(e);
-      toast('تعذر الاتصال بالسيرفر', false);
+    } catch (_) {
+      toast('خطأ في الاتصال بالسيرفر', false);
     }
-    btn.disabled = false; btn.textContent = 'حفظ الحساب';
   }
 
-  /* ================= نافذة الإجراء على الحجز ================= */
-
-  // The booking page stores the address as "text | map link": split them
-  function splitAddress(address, notes) {
-    const urlRe = /https?:\/\/[^\s|]+/;
-    const found = (address || '').match(urlRe) || (notes || '').match(urlRe);
-    const text = (address || '').replace(/\s*\|?\s*https?:\/\/[^\s|]+/, '').trim();
-    const cleanNotes = (notes || '').replace(/\s*https?:\/\/[^\s|]+/, '').trim();
-    return { text, link: found ? found[0] : '', notes: cleanNotes };
+  async function deleteStaff(id) {
+    if (!confirm('هل أنت متأكد من حذف هذا الحساب؟')) return;
+    try {
+      const res = await adminFetch(`${API_BASE_URL}/admin/staff/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast('تم الحذف بنجاح');
+        fetchServerData();
+      } else {
+        toast('تعذر حذف الحساب', false);
+      }
+    } catch (_) {
+      toast('خطأ في الاتصال', false);
+    }
   }
-
-  function infoRow(label, value) {
-    return `<div class="flex justify-between gap-3 text-xs"><span class="text-slate-500 shrink-0">${label}</span><span class="text-slate-800 font-bold text-left">${value}</span></div>`;
-  }
-
-  function staffOptions(list, selectedId, placeholder) {
-    return `<option value="">${placeholder}</option>` + list.map(p =>
-      `<option value="${esc(p.id)}" ${String(p.id) === String(selectedId) ? 'selected' : ''}>${esc(p.full_name)}${p.phone ? ' - ' + esc(p.phone) : ''}</option>`
-    ).join('');
-  }
-
-  const FIELD = 'w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-brand shadow-sm';
 
   function openModal(id) {
     const b = allServerBookings.find(x => String(x.id) === String(id));
     if (!b) return;
-    currentBookingId = b.id;
+    currentBookingId = id;
     modalPayment = b.payment_status || 'unpaid';
 
+    $('modalSubtitle').textContent = `رقم الحجز: #${String(id).substring(0, 8)}`;
+    
     const therapists = staffMembers.filter(s => s.role === 'therapist');
     const drivers = staffMembers.filter(s => s.role === 'driver');
-    const addr = splitAddress(b.location_address, b.notes);
-    const phone = String(b.client_phone || '');
-    const wa = /^05\d{8}$/.test(phone) ? `https://wa.me/966${phone.slice(1)}` : '';
-    const created = b.created_at ? new Date(b.created_at).toLocaleString('ar-SA', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '-';
-    const staffMissing = therapists.length === 0 || drivers.length === 0;
-
-    $('modalSubtitle').textContent = '#' + String(b.id).slice(0, 8).toUpperCase();
 
     $('modalBody').innerHTML = `
-      <section class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
-        <h4 class="text-xs font-extrabold text-brand flex items-center gap-2"><i class="fa-solid fa-user"></i> معلومات العميل</h4>
-        ${infoRow('الاسم', esc(b.client_name || 'عميل جديد'))}
-        ${infoRow('الجوال', `<span dir="ltr">${esc(phone || '-')}</span>`)}
-        ${phone ? `<div class="flex gap-2 pt-1">
-          <a href="tel:${esc(phone)}" class="flex-1 text-center text-[11px] font-bold bg-white hover:bg-slate-100 border border-slate-300 rounded-lg py-1.5 text-slate-700"><i class="fa-solid fa-phone ml-1"></i> اتصال</a>
-          ${wa ? `<a href="${esc(wa)}" target="_blank" rel="noopener" class="flex-1 text-center text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg py-1.5"><i class="fa-brands fa-whatsapp ml-1"></i> واتساب</a>` : ''}
-        </div>` : ''}
-      </section>
+      <div class="space-y-3 text-xs bg-slate-50 p-4 rounded-2xl">
+        <div><b>العميل:</b> ${esc(b.client_name)} (${esc(b.client_phone)})</div>
+        <div><b>الخدمة:</b> ${esc(b.service_title)} (${esc(b.service_price)} ر.س)</div>
+        <div><b>الموعد:</b> ${esc(b.booking_date)} - ${esc(b.booking_time)}</div>
+        <div><b>العنوان:</b> ${esc(b.location_address)}</div>
+        ${b.notes ? `<div><b>ملاحظات:</b> ${esc(b.notes)}</div>` : ''}
+      </div>
 
-      <section class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
-        <h4 class="text-xs font-extrabold text-brand flex items-center gap-2"><i class="fa-solid fa-clipboard-list"></i> تفاصيل الحجز</h4>
-        ${infoRow('الخدمة', esc(b.service_title || '-'))}
-        ${infoRow('عدد الأشخاص', esc(b.people_count || 1))}
-        ${infoRow('المبلغ الإجمالي', b.service_price ? esc(b.service_price) + ' ر.س' : '-')}
-        ${infoRow('التاريخ', esc(b.booking_date || '-'))}
-        ${infoRow('الوقت', esc(b.booking_time || '-'))}
-        ${infoRow('وقت تسجيل الطلب', esc(created))}
-        <div class="pt-2 border-t border-slate-200 space-y-1.5">
-          <div class="text-xs"><span class="text-slate-500"><i class="fa-solid fa-location-dot ml-1"></i>العنوان: </span><span class="text-slate-800 font-bold">${esc(addr.text || 'غير محدد')}</span></div>
-          ${addr.link ? `<a href="${esc(addr.link)}" target="_blank" rel="noopener" class="inline-block text-[11px] font-bold text-brand hover:opacity-80 underline"><i class="fa-solid fa-map-location-dot ml-1"></i>فتح الموقع على الخريطة</a>` : ''}
-          ${addr.notes ? `<div class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded-lg"><i class="fa-regular fa-note-sticky ml-1"></i>${esc(addr.notes)}</div>` : ''}
-        </div>
-      </section>
-
-      <section class="bg-white border-2 border-brand/30 rounded-2xl p-4 space-y-3">
-        <h4 class="text-xs font-extrabold text-brand flex items-center gap-2"><i class="fa-solid fa-user-gear"></i> التعيين والدفع</h4>
-
-        ${staffMissing ? `<div class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-          لا يوجد معالجات أو سائقين كافيين. أضفهم من صفحة المعالجات والسائقين.
-        </div>` : ''}
-
-        <div>
-          <label class="block text-[11px] font-bold text-slate-600 mb-1">المعالجة / الأخصائية</label>
-          <select id="m-therapist" onchange="onStaffChange()" class="${FIELD}">${staffOptions(therapists, b.therapist_id, '-- اختر المعالجة --')}</select>
-        </div>
-
-        <div>
-          <label class="block text-[11px] font-bold text-slate-600 mb-1">السائق</label>
-          <select id="m-driver" onchange="onStaffChange()" class="${FIELD}">${staffOptions(drivers, b.driver_id, '-- اختر السائق --')}</select>
-        </div>
-
-        <div>
-          <label class="block text-[11px] font-bold text-slate-600 mb-1">حالة الحجز</label>
-          <select id="m-status" class="${FIELD}">
+      <div class="space-y-3">
+        <label class="block text-xs font-bold text-slate-700">حالة الحجز
+          <select id="modalStatusSelect" class="field-light mt-1 font-bold">
             ${STATUSES.map(s => `<option value="${s.value}" ${b.status === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}
           </select>
-        </div>
+        </label>
+
+        <label class="block text-xs font-bold text-slate-700">تعيين معالجة
+          <select id="modalTherapistSelect" class="field-light mt-1">
+            <option value="">-- اختر معالجة --</option>
+            ${therapists.map(t => `<option value="${t.id}" ${b.therapist_id == t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
+          </select>
+        </label>
+
+        <label class="block text-xs font-bold text-slate-700">تعيين سائق
+          <select id="modalDriverSelect" class="field-light mt-1">
+            <option value="">-- اختر سائق --</option>
+            ${drivers.map(d => `<option value="${d.id}" ${b.driver_id == d.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
+          </select>
+        </label>
 
         <div>
-          <label class="block text-[11px] font-bold text-slate-600 mb-1">هل تم الدفع؟</label>
-          <div class="grid ${modalPayment === 'refunded' ? 'grid-cols-3' : 'grid-cols-2'} gap-2" id="m-payment">
-            <button type="button" data-pay="paid" onclick="setPayment('paid')"></button>
-            <button type="button" data-pay="unpaid" onclick="setPayment('unpaid')"></button>
-            ${modalPayment === 'refunded' ? `<button type="button" data-pay="refunded" onclick="setPayment('refunded')"></button>` : ''}
+          <span class="block text-xs font-bold text-slate-700 mb-1">حالة الدفع</span>
+          <div class="flex gap-2">
+            ${Object.entries(PAYMENT_LABELS).map(([k, lbl]) => `
+              <button type="button" onclick="setModalPayment('${k}')" class="flex-1 py-2 rounded-xl text-xs font-extrabold border transition ${modalPayment === k ? 'bg-brand text-white border-brand' : 'bg-white text-slate-700 border-slate-200'}">${lbl}</button>
+            `).join('')}
           </div>
         </div>
+      </div>
 
-        <p class="text-[11px] text-slate-500"><i class="fa-regular fa-bell ml-1"></i>عند الحفظ يصل إشعار للعميل بالتغييرات وتتحدث بياناته تلقائياً.</p>
-      </section>
-
-      <div class="flex gap-3">
-        <button id="m-save" onclick="saveAssignment()" class="flex-1 bg-brand hover:opacity-90 text-white text-sm font-bold py-3 rounded-full transition shadow-md disabled:opacity-60">
-          <i class="fa-solid fa-paper-plane ml-1"></i> حفظ وإرسال إشعار للعميل
+      <div class="pt-3 flex gap-2 border-t border-slate-100">
+        <button onclick="sendWhatsAppInvoice(${JSON.stringify(b).replace(/"/g, '&quot;')})" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
+          <i class="fa-brands fa-whatsapp text-sm"></i> إرسال الفاتورة واتساب
         </button>
-        <button onclick="closeModal()" class="px-5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-sm font-bold rounded-full transition">إلغاء</button>
+        <button onclick="saveBookingChanges()" class="flex-1 bg-brand hover:opacity-90 text-white font-extrabold py-3 rounded-xl text-xs transition">
+          حفظ التعديلات
+        </button>
       </div>
     `;
 
-    setPayment(modalPayment);
     $('modal').classList.remove('hidden');
     $('modal').classList.add('flex');
+  }
+
+  function setModalPayment(status) {
+    modalPayment = status;
+    const buttons = document.querySelectorAll('#modalBody button[type="button"]');
+    // update buttons style dynamically
+    openModal(currentBookingId);
   }
 
   function closeModal() {
     $('modal').classList.add('hidden');
     $('modal').classList.remove('flex');
-    currentBookingId = null;
   }
 
-  function setPayment(value) {
-    modalPayment = value;
-    document.querySelectorAll('#m-payment button').forEach(btn => {
-      const v = btn.dataset.pay;
-      const on = v === value;
-      btn.textContent = (v === 'paid' ? '✅ ' : v === 'unpaid' ? '⏳ ' : '↩️ ') + PAYMENT_LABELS[v];
-      btn.className = 'text-xs font-bold py-2.5 rounded-xl border transition ' + (on
-        ? (v === 'paid' ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
-          : v === 'unpaid' ? 'bg-rose-50 border-rose-400 text-rose-700'
-          : 'bg-amber-50 border-amber-400 text-amber-700')
-        : 'bg-white border-slate-300 text-slate-500 hover:border-slate-400');
-    });
-  }
+  async function saveBookingChanges() {
+    const status = $('modalStatusSelect').value;
+    const therapist_id = $('modalTherapistSelect').value || null;
+    const driver_id = $('modalDriverSelect').value || null;
 
-  // When both a therapist and a driver are chosen on a pending booking, suggest "assigned"
-  function onStaffChange() {
-    const st = $('m-status');
-    if ($('m-therapist').value && $('m-driver').value && st.value === 'pending') st.value = 'assigned';
-  }
+    const payload = {
+      status,
+      therapist_id,
+      driver_id,
+      payment_status: modalPayment
+    };
 
-  // Save: update the booking in the database and notify the client
-  async function saveAssignment() {
-    if (!currentBookingId) return;
-    const bookingId = currentBookingId;
-    const btn = $('m-save');
-    btn.disabled = true;
     try {
-      const res = await adminFetch(`${API_BASE_URL}/admin/bookings/${bookingId}/assign`, {
+      const res = await adminFetch(`${API_BASE_URL}/admin/bookings/${currentBookingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          therapist_id: $('m-therapist').value || null,
-          driver_id: $('m-driver').value || null,
-          status: $('m-status').value,
-          payment_status: modalPayment
-        })
+        body: JSON.stringify(payload)
       });
-      const data = await res.json().catch(() => ({}));
-
-      if (res.ok && data.success) {
+      if (res.ok) {
+        toast('✅ تم تحديث الحجز بنجاح');
         closeModal();
-        toast(data.notified ? '✅ تم الحفظ وإرسال إشعار للعميل' : '✅ تم الحفظ (لا توجد تغييرات جديدة لإشعار العميل)');
         fetchServerData();
       } else {
-        toast('❌ فشل التحديث: ' + (data.detail || data.error || res.status), false);
-        btn.disabled = false;
+        toast('تعذر تحديث الحجز', false);
       }
-    } catch (err) {
-      console.error('❌ خطأ في التحديث:', err);
-      toast('❌ تعذر الاتصال بالسيرفر أثناء الحفظ', false);
-      btn.disabled = false;
+    } catch (_) {
+      toast('خطأ في الاتصال', false);
     }
   }
 
-  /* ================= الأحداث ================= */
-
-  document.querySelectorAll('.navbtn').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
-  $('addStaffBtn').addEventListener('click', openStaffModal);
-  $('genPass').addEventListener('click', () => { $('sPass').value = genPass(); });
-  $('saveStaff').addEventListener('click', saveStaff);
-  $('photoInput').addEventListener('change', async (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    try { photoData = await resizeImage(f); $('photoPreview').src = photoData; }
-    catch (err) { toast('تعذر قراءة الصورة', false); }
-  });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeStaffModal(); } });
-
-  window.onload = function () {
-    fetchServerData();
-    setInterval(fetchServerData, 10000);
-  };
+  function filterAdminBookings() {
+    const query = $('adminSearchInput').value.toLowerCase().trim();
+    if (!query) {
+      renderAdminBookingsTable(displayedBookings);
+      return;
+    }
+    const filtered = displayedBookings.filter(b => 
+      (b.client_name && b.client_name.toLowerCase().includes(query)) ||
+      (b.client_phone && b.client_phone.includes(query)) ||
+      (b.service_title && b.service_title.toLowerCase().includes(query))
+    );
+    renderAdminBookingsTable(filtered);
+  }
 </script>
 </body>
 </html>
