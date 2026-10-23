@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14162a">
+<link rel="manifest" href="/manifest.json">
 <title>دخول الموظفين</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -12,6 +14,8 @@
   body{background:#ecebfa;font-family:'Tajawal',sans-serif}
   .field{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:14px;padding:.7rem .9rem;width:100%;outline:none}
   .field:focus{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.2)}
+  @media screen and (max-width:768px){input{font-size:16px!important}}
+  .new-card{box-shadow:0 0 0 3px #fbbf24}
 </style>
 </head>
 <body class="text-ink min-h-screen p-4">
@@ -30,19 +34,31 @@
 
 <!-- Dashboard -->
 <div id="appView" class="hidden max-w-2xl mx-auto">
-  <header class="flex items-center gap-4 mb-6">
+  <header class="flex items-center gap-4 mb-4">
     <div id="avatar"></div>
     <div class="flex-1">
       <div id="who" class="text-lg font-extrabold"></div>
       <div id="roleLbl" class="text-sm text-slate-500"></div>
     </div>
-    <button id="refresh" class="bg-white border border-slate-200 rounded-full px-4 py-2 text-sm"><i class="fa-solid fa-rotate"></i></button>
+    <button id="refresh" class="bg-white border border-slate-200 rounded-full px-4 py-2 text-sm" title="تحديث"><i class="fa-solid fa-rotate"></i></button>
     <button id="logout" class="bg-white border border-slate-200 rounded-full px-4 py-2 text-sm">خروج</button>
   </header>
+
+  <!-- Push notifications banner -->
+  <div id="pushBanner" class="hidden bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-4">
+    <div class="font-extrabold text-amber-900 text-sm mb-1"><i class="fa-solid fa-bell ml-1"></i> فعّل التنبيهات</div>
+    <p id="pushHelp" class="text-xs text-amber-800 mb-3">لتصلك تفاصيل الحجز (الاسم والموقع والموعد والحالة) على جوالك فور تعيينك، حتى لو كانت الصفحة مغلقة.</p>
+    <button id="pushBtn" class="bg-amber-500 hover:bg-amber-600 text-white font-extrabold rounded-full px-5 py-2 text-sm">تفعيل الإشعارات</button>
+  </div>
+  <div id="pushOk" class="hidden bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl px-4 py-2 mb-4 text-xs font-bold flex items-center justify-between gap-2">
+    <span><i class="fa-solid fa-circle-check ml-1"></i> الإشعارات مفعّلة على هذا الجهاز</span>
+    <button id="pushTest" class="underline">تجربة</button>
+  </div>
+
   <div id="items" class="space-y-3"></div>
 </div>
 
-<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-ink text-white px-5 py-3 rounded-full text-sm shadow-lg opacity-0 pointer-events-none transition-opacity"></div>
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-ink text-white px-5 py-3 rounded-full text-sm shadow-lg opacity-0 pointer-events-none transition-opacity max-w-[90vw] text-center"></div>
 
 <script>
 const isLocal = ['localhost', '127.0.0.1', ''].includes(location.hostname);
@@ -50,7 +66,6 @@ const API = (location.protocol === 'file:' || (isLocal && location.port !== '500
 const $ = id => document.getElementById(id);
 
 const STATUS = { pending:'قيد الانتظار', assigned:'تم التعيين', on_the_way:'في الطريق', arrived:'وصل المعالج', in_progress:'قيد التنفيذ', completed:'مكتمل', cancelled:'ملغى' };
-// Button text for the next step, by status it moves to
 const ACTION = {
   on_the_way:  { label: 'أنا في الطريق',  cls: 'bg-white text-ink' },
   arrived:     { label: 'وصلت إلى الموقع', cls: 'bg-white text-ink' },
@@ -60,9 +75,20 @@ const ACTION = {
 
 let token = localStorage.getItem('staffToken');
 let user = JSON.parse(localStorage.getItem('staffUser') || 'null');
+let knownBookings = null;   // id -> status (null = first load, no alerts)
+let freshIds = new Set();   // bookings to highlight
 
 function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.opacity=0,2800);}
+function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.opacity=0,4000);}
+
+function beep(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);o.frequency.value=880;g.gain.value=.2;
+    o.start();o.stop(ctx.currentTime+.35);
+  }catch(_){}
+}
 
 // The booking page stores the address as "text | map link": split them
 function splitAddress(address, notes) {
@@ -81,6 +107,7 @@ async function api(path, opts = {}) {
   return data;
 }
 
+/* ================= Login / logout ================= */
 async function login() {
   $('err').textContent = '';
   const btn = $('loginBtn'); btn.disabled = true;
@@ -90,13 +117,21 @@ async function login() {
     localStorage.setItem('staffToken', token); localStorage.setItem('staffUser', JSON.stringify(user));
     show();
   } catch (e) {
-    $('err').textContent = e.status === 429 ? 'محاولات كثيرة، حاول بعد 10 دقائق' : 'رقم الجوال أو كلمة المرور غير صحيحة';
+    $('err').textContent = e.status === 429 ? 'محاولات كثيرة، حاول بعد 10 دقائق'
+      : e.status === 500 ? 'خطأ في السيرفر، تواصل مع الإدارة'
+      : 'رقم الجوال أو كلمة المرور غير صحيحة';
   }
   btn.disabled = false;
 }
 
-function logout() {
-  token = null; user = null;
+async function logout() {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && await reg.pushManager.getSubscription();
+    if (sub && token) await api('/staff/push/unsubscribe', { method:'POST', body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(()=>{});
+    if (sub) await sub.unsubscribe();
+  } catch (_) {}
+  token = null; user = null; knownBookings = null; freshIds = new Set();
   localStorage.removeItem('staffToken'); localStorage.removeItem('staffUser');
   $('appView').classList.add('hidden'); $('loginView').classList.remove('hidden'); $('pass').value = '';
 }
@@ -109,26 +144,109 @@ function show() {
     ? `<img src="${esc(user.photo_url)}" class="w-14 h-14 rounded-full object-cover" alt="">`
     : `<div class="w-14 h-14 rounded-full bg-brand text-white grid place-items-center text-xl font-extrabold">${esc(user.full_name[0])}</div>`;
   loadBookings();
+  initPush();
+}
+
+/* ================= Push notifications ================= */
+function urlB64ToUint8(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+
+async function initPush() {
+  if (!pushSupported()) {
+    $('pushBanner').classList.remove('hidden');
+    $('pushBtn').classList.add('hidden');
+    $('pushHelp').textContent = isIOS && !isStandalone
+      ? 'على الآيفون: افتح الصفحة في Safari، اضغط زر المشاركة، ثم «إضافة إلى الشاشة الرئيسية»، وافتحها من هناك لتفعيل الإشعارات.'
+      : 'هذا المتصفح لا يدعم الإشعارات. استخدم Chrome أو Safari.';
+    return;
+  }
+  try {
+    await navigator.serviceWorker.register('/sw.js');
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub && Notification.permission === 'granted') {
+      // refresh the subscription -> this account (a phone may be shared between staff)
+      await api('/staff/push/subscribe', { method:'POST', body: JSON.stringify({ subscription: sub }) });
+      setPushUI(true);
+    } else {
+      setPushUI(false);
+    }
+  } catch (e) { setPushUI(false); }
+}
+
+function setPushUI(on) {
+  $('pushBanner').classList.toggle('hidden', on);
+  $('pushOk').classList.toggle('hidden', !on);
+}
+
+async function enablePush() {
+  const btn = $('pushBtn'); btn.disabled = true;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('لم يتم السماح بالإشعارات. فعّلها من إعدادات المتصفح'); btn.disabled = false; return; }
+    await navigator.serviceWorker.register('/sw.js');
+    const reg = await navigator.serviceWorker.ready;
+    const { key } = await api('/staff/push/key');
+    if (!key) { toast('الإشعارات غير مفعّلة على السيرفر، أبلغ الإدارة'); btn.disabled = false; return; }
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(key) });
+    await api('/staff/push/subscribe', { method:'POST', body: JSON.stringify({ subscription: sub }) });
+    setPushUI(true);
+    toast('✅ تم تفعيل الإشعارات');
+  } catch (e) {
+    console.error(e);
+    toast('تعذر تفعيل الإشعارات');
+  }
+  btn.disabled = false;
+}
+
+/* ================= Bookings ================= */
+function detectChanges(list) {
+  const now = {};
+  list.forEach(b => { now[b.id] = b.status; });
+  if (knownBookings) {
+    let alerted = false;
+    list.forEach(b => {
+      if (!(b.id in knownBookings)) {
+        freshIds.add(b.id);
+        if (!alerted) { toast('📌 حجز جديد معيّن لك'); alerted = true; }
+      } else if (knownBookings[b.id] !== b.status) {
+        if (!alerted) { toast('🔄 تغيّرت حالة حجز: ' + (STATUS[b.status] || b.status)); alerted = true; }
+      }
+    });
+    if (alerted) { beep(); if (navigator.vibrate) navigator.vibrate([300,150,300]); }
+  }
+  knownBookings = now;
 }
 
 async function loadBookings() {
   try {
     const list = await api('/staff/me/bookings');
+    detectChanges(list);
     if (!list.length) { $('items').innerHTML = '<div class="text-slate-400 text-center p-10">لا توجد حجوزات معيّنة لك الآن.</div>'; return; }
     $('items').innerHTML = list.map(b => {
       const a = splitAddress(b.location_address, b.notes);
       const act = b.next_status ? ACTION[b.next_status] : null;
       const phone = String(b.client_phone || '');
+      const isNew = freshIds.has(b.id);
       return `
-      <div class="bg-ink text-white rounded-3xl p-5">
+      <div class="bg-ink text-white rounded-3xl p-5 ${isNew ? 'new-card' : ''}">
         <div class="flex items-start justify-between gap-3">
           <div>
-            <div class="font-bold">${esc(b.service_title || 'خدمة مساج')}${b.people_count > 1 ? ' · ' + esc(b.people_count) + ' أشخاص' : ''}</div>
-            <div class="text-sm text-slate-300 mt-1">${esc(b.booking_date)} · ${esc(b.booking_time)}</div>
+            ${isNew ? '<span class="text-[10px] font-extrabold bg-amber-400 text-ink rounded-full px-2 py-0.5 ml-2">جديد</span>' : ''}
+            <span class="font-bold">${esc(b.service_title || 'خدمة مساج')}${b.people_count > 1 ? ' · ' + esc(b.people_count) + ' أشخاص' : ''}</span>
+            <div class="text-sm text-slate-300 mt-1"><i class="fa-regular fa-clock ml-1"></i>${esc(b.booking_date)} · ${esc(b.booking_time)}</div>
           </div>
           <span class="text-xs bg-white/15 rounded-full px-3 py-1 whitespace-nowrap">${esc(STATUS[b.status] || b.status)}</span>
         </div>
-        <div class="text-sm mt-3">العميل: ${esc(b.client_name || '-')}</div>
+        <div class="text-sm mt-3"><i class="fa-regular fa-user ml-1"></i>العميل: ${esc(b.client_name || '-')}</div>
         <div class="text-sm text-slate-300 mt-1"><i class="fa-solid fa-location-dot ml-1"></i>${esc(a.text || 'غير محدد')}</div>
         ${a.notes ? `<div class="text-xs text-amber-200 bg-amber-400/10 rounded-lg p-2 mt-2">${esc(a.notes)}</div>` : ''}
         <div class="flex flex-wrap gap-2 mt-4">
@@ -143,6 +261,7 @@ async function loadBookings() {
 
 $('items').addEventListener('click', async e => {
   const b = e.target.closest('.act'); if (!b) return;
+  freshIds.delete(b.dataset.id);
   b.disabled = true;
   try {
     await api('/staff/me/bookings/' + b.dataset.id, { method:'PUT', body: JSON.stringify({ status: b.dataset.st }) });
@@ -150,13 +269,21 @@ $('items').addEventListener('click', async e => {
   } catch (err) { toast('تعذر تحديث الحالة'); }
   loadBookings();
 });
+
 $('loginBtn').addEventListener('click', login);
 $('pass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 $('logout').addEventListener('click', logout);
 $('refresh').addEventListener('click', loadBookings);
+$('pushBtn').addEventListener('click', enablePush);
+$('pushTest').addEventListener('click', async () => {
+  try { await api('/staff/push/test', { method:'POST' }); toast('أُرسل إشعار تجريبي'); }
+  catch (e) { toast('تعذر إرسال الإشعار التجريبي'); }
+});
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden && token) loadBookings(); });
 
 if (token && user) show();
-setInterval(() => { if (token) loadBookings(); }, 15000);
+setInterval(() => { if (token && !document.hidden) loadBookings(); }, 8000);
 </script>
 </body>
 </html>

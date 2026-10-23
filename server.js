@@ -7,6 +7,25 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 
+// Web Push (optional: the server still runs if the package / keys are missing)
+let webpush = null;
+try {
+  webpush = require('web-push');
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
+      process.env.VAPID_PUBLIC_KEY,
+      process.env.VAPID_PRIVATE_KEY
+    );
+  } else {
+    console.warn('⚠️ VAPID keys are not set: push notifications are disabled.');
+    webpush = null;
+  }
+} catch (e) {
+  console.warn('⚠️ web-push is not installed: push notifications are disabled.');
+  webpush = null;
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const IS_VERCEL = !!process.env.VERCEL;
@@ -116,6 +135,18 @@ function initDatabase() {
 
       await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT');
       await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+          endpoint TEXT PRIMARY KEY,
+          user_id UUID NOT NULL,
+          subscription JSONB NOT NULL,
+          created_at TIMESTAMPTZ DEFAULT now()
+        )
+      `);
+      await client.query(
+        'CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions (user_id)'
+      );
       console.log('✅ Database schema verified.');
     } finally {
       client.release();
@@ -469,6 +500,16 @@ async function updateBooking(req, res) {
     }
 
     await db.query('COMMIT');
+
+    // Push to the assigned staff phones (new assignment, or status change on their booking)
+    const pushJobs = [];
+    [[therapistId, old.therapist_id], [driverId, old.driver_id]].forEach(([sid, oldSid]) => {
+      if (!sid) return;
+      if (sid !== oldSid) pushJobs.push(pushBookingToStaff(id, sid, '📌 حجز جديد معيّن لك', db));
+      else if (newStatus !== old.status) pushJobs.push(pushBookingToStaff(id, sid, '🔄 تحديث على حجزك', db));
+    });
+    await Promise.all(pushJobs);
+
     res.json({ success: true, notified, message: lines.join(' • ') });
   } catch (error) {
     await db.query('ROLLBACK').catch(() => {});
@@ -604,6 +645,14 @@ app.put('/api/staff/me/bookings/:id', requireStaff, async (req, res) => {
       [id, `تحديث على حجزك #${id.slice(0, 8).toUpperCase()}`, STATUS_MESSAGES[next] || 'تم تحديث حالة حجزك']
     );
     await db.query('COMMIT');
+
+    // When the driver arrives, tell the therapist it's time to start
+    if (next === 'arrived') {
+      const t = await db.query('SELECT therapist_id FROM bookings WHERE id = $1', [id]).catch(() => null);
+      const tid = t && t.rows[0] && t.rows[0].therapist_id;
+      if (tid) await pushBookingToStaff(id, tid, '🚗 وصل السائق، جهّزي الجلسة', db);
+    }
+
     res.json({ success: true, status: next });
   } catch (error) {
     await db.query('ROLLBACK').catch(() => {});
@@ -612,6 +661,122 @@ app.put('/api/staff/me/bookings/:id', requireStaff, async (req, res) => {
   } finally {
     db.release();
   }
+});
+
+// ==========================================
+// PUSH NOTIFICATIONS (staff phones)
+// ==========================================
+const STATUS_AR = {
+  pending: 'قيد الانتظار',
+  assigned: 'تم التعيين',
+  on_the_way: 'في الطريق',
+  arrived: 'وصل السائق',
+  in_progress: 'قيد التنفيذ',
+  completed: 'مكتمل',
+  cancelled: 'ملغى'
+};
+
+// The booking page stores the address as "text | map link": split them
+function splitAddr(address, notes) {
+  const urlRe = /https?:\/\/[^\s|]+/;
+  const m = String(address || '').match(urlRe) || String(notes || '').match(urlRe);
+  return {
+    text: String(address || '').replace(/\s*\|?\s*https?:\/\/[^\s|]+/, '').trim(),
+    link: m ? m[0] : ''
+  };
+}
+
+// q = pool or an already-checked-out client (important on Vercel where the pool has 1 connection)
+async function sendPush(staffId, payload, q = pool) {
+  if (!webpush || !staffId) return;
+  try {
+    const subs = await q.query('SELECT endpoint, subscription FROM push_subscriptions WHERE user_id = $1', [staffId]);
+    const body = JSON.stringify(payload);
+    await Promise.all(subs.rows.map(async (row) => {
+      try {
+        await webpush.sendNotification(row.subscription, body, { TTL: 3600, urgency: 'high' });
+      } catch (e) {
+        if (e.statusCode === 404 || e.statusCode === 410) {
+          await q.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [row.endpoint]).catch(() => {});
+        } else {
+          console.error('⚠️ push send failed:', e.statusCode || '', e.message);
+        }
+      }
+    }));
+  } catch (e) {
+    console.error('⚠️ push error:', e.message);
+  }
+}
+
+async function pushBookingToStaff(bookingId, staffId, title, q = pool) {
+  if (!webpush || !staffId) return;
+  try {
+    const r = await q.query(
+      `SELECT b.id, u.full_name AS client_name, u.phone AS client_phone, s.title AS service_title,
+              to_char(b.booking_date, 'YYYY-MM-DD') AS booking_date,
+              to_char(b.booking_time, 'HH24:MI') AS booking_time,
+              b.location_address, b.notes, b.status::text AS status
+       FROM bookings b
+       LEFT JOIN users u ON u.id = b.client_id
+       LEFT JOIN services s ON s.id = b.service_id
+       WHERE b.id = $1`,
+      [bookingId]
+    );
+    if (!r.rows.length) return;
+    const b = r.rows[0];
+    const a = splitAddr(b.location_address, b.notes);
+    await sendPush(staffId, {
+      title,
+      body:
+        `👤 ${b.client_name || 'عميل'}\n` +
+        `💆 ${b.service_title || 'خدمة مساج'}\n` +
+        `🕒 ${b.booking_date} ${b.booking_time}\n` +
+        `📍 ${a.text || 'غير محدد'}\n` +
+        `الحالة: ${STATUS_AR[b.status] || b.status}`,
+      tag: 'booking-' + bookingId,
+      url: '/staff'
+    }, q);
+  } catch (e) {
+    console.error('⚠️ pushBookingToStaff error:', e.message);
+  }
+}
+
+app.get('/api/staff/push/key', (req, res) => {
+  res.json({ key: webpush ? process.env.VAPID_PUBLIC_KEY : '' });
+});
+
+app.post('/api/staff/push/subscribe', requireStaff, async (req, res) => {
+  const sub = req.body && req.body.subscription;
+  if (!sub || !sub.endpoint || !sub.keys) return res.status(400).json({ error: 'Invalid subscription' });
+  try {
+    await pool.query(
+      `INSERT INTO push_subscriptions (endpoint, user_id, subscription)
+       VALUES ($1, $2, $3::jsonb)
+       ON CONFLICT (endpoint) DO UPDATE SET user_id = $2, subscription = $3::jsonb`,
+      [sub.endpoint, req.staff.id, JSON.stringify(sub)]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('❌ subscribe error:', e);
+    res.status(500).json({ error: 'Could not save subscription' });
+  }
+});
+
+app.post('/api/staff/push/unsubscribe', requireStaff, async (req, res) => {
+  const endpoint = req.body && req.body.endpoint;
+  if (endpoint) await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]).catch(() => {});
+  res.json({ success: true });
+});
+
+app.post('/api/staff/push/test', requireStaff, async (req, res) => {
+  if (!webpush) return res.status(503).json({ error: 'Push is not configured on the server' });
+  await sendPush(req.staff.id, {
+    title: '✅ الإشعارات تعمل',
+    body: 'ستصلك هنا تفاصيل الحجوزات الجديدة وتحديثاتها.',
+    tag: 'test',
+    url: '/staff'
+  });
+  res.json({ success: true });
 });
 
 // ==========================================

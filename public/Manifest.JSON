@@ -1,0 +1,11 @@
+{
+  "name": "ريلاكس سبا - الموظفون",
+  "short_name": "الموظفون",
+  "start_url": "/staff",
+  "scope": "/",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#ecebfa",
+  "theme_color": "#14162a"
+}
