@@ -29,14 +29,14 @@ function safeEqual(a, b) {
 }
 
 function adminAuth(req, res, next) {
-  const pass = process.env.ADMIN_PASSWORD;
+  const pass = (process.env.ADMIN_PASSWORD || '').trim();
   if (!pass) {
     return res.status(500).json({ error: 'ADMIN_PASSWORD is not set on the server' });
   }
   const b64 = (req.headers.authorization || '').split(' ')[1] || '';
   const decoded = Buffer.from(b64, 'base64').toString();
   const idx = decoded.indexOf(':');
-  const given = idx >= 0 ? decoded.slice(idx + 1) : '';
+  const given = (idx >= 0 ? decoded.slice(idx + 1) : '').trim();
   if (given && safeEqual(given, pass)) return next();
   
   res.status(401).json({ error: 'Authentication required' });
