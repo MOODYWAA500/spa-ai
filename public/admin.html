@@ -223,7 +223,7 @@
           <i class="fa-solid fa-building-columns text-brand"></i> بيانات الحساب البنكي للفواتير
         </h2>
         <p class="text-xs text-slate-500">تُحفظ مرة واحدة وتُضاف تلقائياً في فاتورة الواتساب التي تُرسل للعملاء من زر «إجراء».</p>
-        
+
         <div class="grid sm:grid-cols-2 gap-3">
           <label class="text-xs font-bold text-slate-700">اسم البنك
             <input id="setBank" oninput="renderPreview()" class="field-light mt-1" placeholder="مثال: بنك الراجحي">
@@ -319,6 +319,7 @@
   let currentView = 'bookings';
   let photoData = null;
   let currentBankSettings = {};
+  let knownAdmin = null; // id -> status (null = first load, no alerts)
 
   const STATUSES = [
     { value: 'pending',     label: 'قيد الانتظار' },
@@ -329,7 +330,6 @@
     { value: 'completed',   label: 'مكتمل' },
     { value: 'cancelled',   label: 'ملغى' }
   ];
-  const ACTIVE_STATUSES = ['assigned', 'on_the_way', 'arrived', 'in_progress'];
   const PAYMENT_LABELS = { unpaid: 'غير مدفوع', paid: 'مدفوع', refunded: 'مسترجع' };
   const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
@@ -338,6 +338,8 @@
   function esc(text) {
     return String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+
+  function staffName(s) { return (s && (s.full_name || s.name)) || ''; }
 
   function translateStatus(status) {
     const found = STATUSES.find((s) => s.value === status);
@@ -360,10 +362,45 @@
   function toast(message, ok = true) {
     const el = $('toast');
     el.textContent = message;
-    el.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-full text-sm font-bold shadow-xl text-white ' +
+    el.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-full text-sm font-bold shadow-xl text-white max-w-[90vw] text-center ' +
       (ok ? 'bg-emerald-600' : 'bg-rose-600');
     clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => el.classList.add('hidden'), 4000);
+    toast.timer = setTimeout(() => el.classList.add('hidden'), 5000);
+  }
+
+  function adminBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 660; g.gain.value = 0.2;
+      o.start(); o.stop(ctx.currentTime + 0.3);
+    } catch (_) {}
+  }
+
+  // Alerts the admin when a booking is new or a driver / therapist changed its status
+  function detectChanges(list) {
+    if (knownAdmin) {
+      const msgs = [];
+      list.forEach((b) => {
+        const short = String(b.id).substring(0, 8);
+        const old = knownAdmin[b.id];
+        if (old === undefined) {
+          msgs.push(`🆕 حجز جديد #${short} من ${b.client_name || 'عميل'}`);
+        } else if (old !== b.status) {
+          const who = (b.status === 'on_the_way' || b.status === 'arrived')
+            ? (b.driver_name || 'السائق')
+            : (b.therapist_name || 'المعالجة');
+          msgs.push(`🔔 ${who}: ${translateStatus(b.status)} — حجز #${short}`);
+        }
+      });
+      if (msgs.length) {
+        toast(msgs[0] + (msgs.length > 1 ? ` (+${msgs.length - 1})` : ''));
+        adminBeep();
+      }
+    }
+    knownAdmin = {};
+    list.forEach((b) => { knownAdmin[b.id] = b.status; });
   }
 
   function adminFetch(url, opts = {}) {
@@ -384,14 +421,28 @@
     btn.disabled = true;
     btn.textContent = 'جاري التحقق...';
 
-    const credentials = btoa('admin:' + pass);
+    let credentials;
+    try {
+      credentials = btoa('admin:' + pass);
+    } catch (_) {
+      errBox.textContent = 'كلمة المرور يجب أن تكون بأحرف إنجليزية وأرقام فقط';
+      errBox.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'دخول لوحة التحكم';
+      return;
+    }
 
     try {
       const res = await fetch(`${API_BASE_URL}/admin/bookings`, {
         headers: { 'Authorization': 'Basic ' + credentials }
       });
 
-      if (!res.ok) throw new Error('كلمة المرور غير صحيحة');
+      if (res.status === 401) throw new Error('كلمة المرور غير صحيحة');
+      if (res.status === 500) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'خطأ في السيرفر (500)');
+      }
+      if (!res.ok) throw new Error('تعذر الاتصال بالسيرفر (' + res.status + ')');
 
       sessionStorage.setItem('admin_auth', credentials);
       $('adminLoginOverlay').classList.add('hidden');
@@ -407,6 +458,7 @@
 
   function adminLogout() {
     sessionStorage.removeItem('admin_auth');
+    knownAdmin = null;
     $('adminLoginPass').value = '';
     $('adminLoginOverlay').classList.remove('hidden');
   }
@@ -420,6 +472,20 @@
       $('adminLoginOverlay').classList.remove('hidden');
     }
   });
+
+  // Auto refresh every 10s (not while a window is open, so edits are never interrupted)
+  setInterval(() => {
+    if (!sessionStorage.getItem('admin_auth')) return;
+    if (!$('modal').classList.contains('hidden') || !$('staffModal').classList.contains('hidden')) return;
+    fetchServerData();
+  }, 10000);
+
+  async function loadBankSettings() {
+    try {
+      const res = await adminFetch(`${API_BASE_URL}/admin/settings`);
+      if (res.ok) currentBankSettings = (await res.json()) || {};
+    } catch (_) {}
+  }
 
   async function loadSettingsForm() {
     try {
@@ -492,12 +558,16 @@ ${note ? '📌 ' + note : ''}`;
         return;
       }
       if (!response.ok) throw new Error('فشل الاتصال بـ API');
-      allServerBookings = await response.json();
+      const fresh = await response.json();
+      detectChanges(fresh);
+      allServerBookings = fresh;
 
       try {
         const staffRes = await adminFetch(`${API_BASE_URL}/admin/staff`);
         if (staffRes.ok) staffMembers = await staffRes.json();
       } catch (_) {}
+
+      loadBankSettings();
 
       $('serverStatusBadge').className = 'bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-2 rounded-full text-xs flex items-center gap-2';
       $('serverStatusText').innerText = 'السيرفر متصل الآن';
@@ -583,7 +653,7 @@ ${note ? '📌 ' + note : ''}`;
     $('navPending').textContent = pending;
     $('navPending').classList.toggle('hidden', !pending);
 
-    renderAdminBookingsTable(displayedBookings);
+    filterAdminBookings();
     renderAdminClientsGrid();
     if (currentView === 'therapist' || currentView === 'driver') renderStaff();
   }
@@ -597,6 +667,7 @@ ${note ? '📌 ' + note : ''}`;
 
     tbody.innerHTML = bookings.map(b => {
       const shortId = b.id ? String(b.id).substring(0, 8) : 'N/A';
+      const addr = String(b.location_address || '').split('|')[0].trim();
       return `
         <tr class="hover:bg-slate-50 transition">
           <td class="p-3.5 font-bold text-brand" title="${esc(b.id)}">#${esc(shortId)}</td>
@@ -606,9 +677,12 @@ ${note ? '📌 ' + note : ''}`;
           </td>
           <td class="p-3.5 font-medium">${esc(b.service_title || 'خدمة مساج')}</td>
           <td class="p-3.5 text-slate-500">${esc(b.booking_date || '-')} <br> <span class="text-[10px] text-slate-400">${esc(b.booking_time || '')}</span></td>
-          <td class="p-3.5 text-slate-600 max-w-[180px] truncate" title="${esc((b.location_address || '') + (b.notes ? '\n' + b.notes : ''))}">${esc(b.location_address || '-')}</td>
+          <td class="p-3.5 text-slate-600 max-w-[180px] truncate" title="${esc((b.location_address || '') + (b.notes ? '\n' + b.notes : ''))}">${esc(addr || '-')}</td>
           <td class="p-3.5 font-bold text-emerald-600">${esc(b.service_price || 0)} ر.س</td>
-          <td class="p-3.5"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${statusBadgeClass(b.status)}">${esc(translateStatus(b.status))}</span></td>
+          <td class="p-3.5">
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${statusBadgeClass(b.status)}">${esc(translateStatus(b.status))}</span>
+            <div class="text-[10px] mt-1 ${b.payment_status === 'paid' ? 'text-emerald-600' : 'text-slate-400'}">${esc(PAYMENT_LABELS[b.payment_status] || '')}</div>
+          </td>
           <td class="p-3.5 text-center">
             <button onclick="openModal('${esc(b.id)}')" class="bg-brand hover:opacity-90 text-white text-[11px] font-bold px-3.5 py-1.5 rounded-full transition">
               <i class="fa-solid fa-gear ml-1"></i> إجراء
@@ -663,9 +737,9 @@ ${note ? '📌 ' + note : ''}`;
 
     grid.innerHTML = members.map(m => `
       <div class="bg-white border border-slate-100 rounded-3xl p-5 flex items-center gap-4">
-        <img src="${esc(m.photo_url || BLANK)}" class="w-16 h-16 rounded-2xl object-cover bg-slate-100 shrink-0">
+        <img src="${esc(m.photo_url || BLANK)}" class="w-16 h-16 rounded-2xl object-cover bg-slate-100 shrink-0" alt="">
         <div class="flex-1 min-w-0">
-          <h4 class="text-sm font-bold text-slate-900 truncate">${esc(m.name)}</h4>
+          <h4 class="text-sm font-bold text-slate-900 truncate">${esc(staffName(m))}</h4>
           <p class="text-xs text-slate-400 mt-0.5" dir="ltr" style="text-align:right">${esc(m.phone)}</p>
         </div>
         <button onclick="deleteStaff('${esc(m.id)}')" class="text-rose-500 hover:text-rose-700 p-2 text-sm" title="حذف الحساب"><i class="fa-solid fa-trash"></i></button>
@@ -690,16 +764,32 @@ ${note ? '📌 ' + note : ''}`;
   }
 
   function genPass() {
-    return Math.random().toString(36).slice(-8);
+    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    let out = '';
+    const arr = new Uint32Array(10);
+    crypto.getRandomValues(arr);
+    arr.forEach(n => { out += chars[n % chars.length]; });
+    return out;
   }
 
   function handlePhotoSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
+    // Shrink the image so it fits the server limit (~300KB)
     const reader = new FileReader();
-    reader.onload = e => {
-      photoData = e.target.result;
-      $('photoPreview').src = photoData;
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 400;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        photoData = canvas.toDataURL('image/jpeg', 0.8);
+        $('photoPreview').src = photoData;
+      };
+      img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   }
@@ -713,15 +803,21 @@ ${note ? '📌 ' + note : ''}`;
       toast('يرجى تعبئة جميع الحقول', false);
       return;
     }
+    if (password.length < 8) {
+      toast('كلمة المرور يجب أن تكون 8 أحرف على الأقل', false);
+      return;
+    }
 
     const payload = {
       role: currentView,
-      name,
+      full_name: name,
       phone,
       password,
-      photo_url: photoData || BLANK
+      photo: photoData || null
     };
 
+    const btn = $('saveStaff');
+    btn.disabled = true;
     try {
       const res = await adminFetch(`${API_BASE_URL}/admin/staff`, {
         method: 'POST',
@@ -732,13 +828,16 @@ ${note ? '📌 ' + note : ''}`;
         toast('✅ تم إضافة الحساب بنجاح');
         closeStaffModal();
         fetchServerData();
+      } else if (res.status === 401) {
+        adminLogout();
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         toast(err.error || 'تعذر حفظ الحساب', false);
       }
     } catch (_) {
       toast('خطأ في الاتصال بالسيرفر', false);
     }
+    btn.disabled = false;
   }
 
   async function deleteStaff(id) {
@@ -763,16 +862,19 @@ ${note ? '📌 ' + note : ''}`;
     modalPayment = b.payment_status || 'unpaid';
 
     $('modalSubtitle').textContent = `رقم الحجز: #${String(id).substring(0, 8)}`;
-    
+
     const therapists = staffMembers.filter(s => s.role === 'therapist');
     const drivers = staffMembers.filter(s => s.role === 'driver');
+    const parts = String(b.location_address || '').split('|');
+    const addrText = parts[0].trim();
+    const mapLink = (parts[1] || '').trim();
 
     $('modalBody').innerHTML = `
       <div class="space-y-3 text-xs bg-slate-50 p-4 rounded-2xl">
         <div><b>العميل:</b> ${esc(b.client_name)} (${esc(b.client_phone)})</div>
         <div><b>الخدمة:</b> ${esc(b.service_title)} (${esc(b.service_price)} ر.س)</div>
         <div><b>الموعد:</b> ${esc(b.booking_date)} - ${esc(b.booking_time)}</div>
-        <div><b>العنوان:</b> ${esc(b.location_address)}</div>
+        <div><b>العنوان:</b> ${esc(addrText)} ${mapLink ? `<a href="${esc(mapLink)}" target="_blank" rel="noopener" class="text-brand underline mr-1">الخريطة</a>` : ''}</div>
         ${b.notes ? `<div><b>ملاحظات:</b> ${esc(b.notes)}</div>` : ''}
       </div>
 
@@ -786,14 +888,14 @@ ${note ? '📌 ' + note : ''}`;
         <label class="block text-xs font-bold text-slate-700">تعيين معالجة
           <select id="modalTherapistSelect" class="field-light mt-1">
             <option value="">-- اختر معالجة --</option>
-            ${therapists.map(t => `<option value="${t.id}" ${b.therapist_id == t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}
+            ${therapists.map(t => `<option value="${esc(t.id)}" ${b.therapist_id == t.id ? 'selected' : ''}>${esc(staffName(t))}</option>`).join('')}
           </select>
         </label>
 
         <label class="block text-xs font-bold text-slate-700">تعيين سائق
           <select id="modalDriverSelect" class="field-light mt-1">
             <option value="">-- اختر سائق --</option>
-            ${drivers.map(d => `<option value="${d.id}" ${b.driver_id == d.id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}
+            ${drivers.map(d => `<option value="${esc(d.id)}" ${b.driver_id == d.id ? 'selected' : ''}>${esc(staffName(d))}</option>`).join('')}
           </select>
         </label>
 
@@ -801,17 +903,17 @@ ${note ? '📌 ' + note : ''}`;
           <span class="block text-xs font-bold text-slate-700 mb-1">حالة الدفع</span>
           <div class="flex gap-2">
             ${Object.entries(PAYMENT_LABELS).map(([k, lbl]) => `
-              <button type="button" onclick="setModalPayment('${k}')" class="flex-1 py-2 rounded-xl text-xs font-extrabold border transition ${modalPayment === k ? 'bg-brand text-white border-brand' : 'bg-white text-slate-700 border-slate-200'}">${lbl}</button>
+              <button type="button" data-pay="${k}" onclick="setModalPayment('${k}')" class="pay-btn flex-1 py-2 rounded-xl text-xs font-extrabold border transition ${modalPayment === k ? 'bg-brand text-white border-brand' : 'bg-white text-slate-700 border-slate-200'}">${lbl}</button>
             `).join('')}
           </div>
         </div>
       </div>
 
       <div class="pt-3 flex gap-2 border-t border-slate-100">
-        <button onclick="sendWhatsAppInvoice(${JSON.stringify(b).replace(/"/g, '&quot;')})" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
+        <button type="button" onclick="sendWhatsAppInvoice('${esc(b.id)}')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
           <i class="fa-brands fa-whatsapp text-sm"></i> إرسال الفاتورة واتساب
         </button>
-        <button onclick="saveBookingChanges()" class="flex-1 bg-brand hover:opacity-90 text-white font-extrabold py-3 rounded-xl text-xs transition">
+        <button id="saveBookingBtn" type="button" onclick="saveBookingChanges()" class="flex-1 bg-brand hover:opacity-90 text-white font-extrabold py-3 rounded-xl text-xs transition">
           حفظ التعديلات
         </button>
       </div>
@@ -821,16 +923,55 @@ ${note ? '📌 ' + note : ''}`;
     $('modal').classList.add('flex');
   }
 
+  // Only restyles the buttons: the rest of the window (therapist / driver / status) is left untouched
   function setModalPayment(status) {
     modalPayment = status;
-    const buttons = document.querySelectorAll('#modalBody button[type="button"]');
-    // update buttons style dynamically
-    openModal(currentBookingId);
+    document.querySelectorAll('.pay-btn').forEach((btn) => {
+      const on = btn.dataset.pay === status;
+      btn.classList.toggle('bg-brand', on);
+      btn.classList.toggle('text-white', on);
+      btn.classList.toggle('border-brand', on);
+      btn.classList.toggle('bg-white', !on);
+      btn.classList.toggle('text-slate-700', !on);
+      btn.classList.toggle('border-slate-200', !on);
+    });
   }
 
   function closeModal() {
     $('modal').classList.add('hidden');
     $('modal').classList.remove('flex');
+  }
+
+  function sendWhatsAppInvoice(id) {
+    const b = allServerBookings.find(x => String(x.id) === String(id));
+    if (!b) return;
+
+    // 05xxxxxxxx -> 9665xxxxxxxx
+    let phone = String(b.client_phone || '').replace(/\D/g, '');
+    if (phone.startsWith('00')) phone = phone.slice(2);
+    if (phone.startsWith('0')) phone = '966' + phone.slice(1);
+    if (!phone) { toast('لا يوجد رقم جوال للعميل', false); return; }
+
+    const s = currentBankSettings || {};
+    const lines = [
+      `السلام عليكم ${b.client_name || ''} 🌸`,
+      `فاتورة حجزك #${String(b.id).substring(0, 8).toUpperCase()}`,
+      '--------------------------------',
+      `الخدمة: ${b.service_title || ''}`,
+      `عدد الأشخاص: ${b.people_count || 1}`,
+      `الموعد: ${b.booking_date} - ${b.booking_time}`,
+      `الإجمالي: ${b.service_price} ر.س`,
+      `حالة الدفع: ${PAYMENT_LABELS[modalPayment] || ''}`
+    ];
+    if (modalPayment !== 'paid' && (s.iban || s.bank_name)) {
+      lines.push('--------------------------------', '🏛️ بيانات التحويل:');
+      if (s.bank_name) lines.push(`البنك: ${s.bank_name}`);
+      if (s.account_holder) lines.push(`اسم الحساب: ${s.account_holder}`);
+      if (s.iban) lines.push(`IBAN: ${s.iban}`);
+    }
+    if (s.note) lines.push('--------------------------------', `📌 ${s.note}`);
+
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(lines.join('\n'))}`, '_blank');
   }
 
   async function saveBookingChanges() {
@@ -845,6 +986,8 @@ ${note ? '📌 ' + note : ''}`;
       payment_status: modalPayment
     };
 
+    const btn = $('saveBookingBtn');
+    btn.disabled = true;
     try {
       const res = await adminFetch(`${API_BASE_URL}/admin/bookings/${currentBookingId}`, {
         method: 'PUT',
@@ -852,24 +995,28 @@ ${note ? '📌 ' + note : ''}`;
         body: JSON.stringify(payload)
       });
       if (res.ok) {
-        toast('✅ تم تحديث الحجز بنجاح');
+        toast('✅ تم تحديث الحجز وإشعار الموظفين والعميل');
         closeModal();
         fetchServerData();
+      } else if (res.status === 401) {
+        adminLogout();
       } else {
-        toast('تعذر تحديث الحجز', false);
+        const err = await res.json().catch(() => ({}));
+        toast(err.error || 'تعذر تحديث الحجز', false);
       }
     } catch (_) {
       toast('خطأ في الاتصال', false);
     }
+    btn.disabled = false;
   }
 
   function filterAdminBookings() {
-    const query = $('adminSearchInput').value.toLowerCase().trim();
+    const query = ($('adminSearchInput').value || '').toLowerCase().trim();
     if (!query) {
       renderAdminBookingsTable(displayedBookings);
       return;
     }
-    const filtered = displayedBookings.filter(b => 
+    const filtered = displayedBookings.filter(b =>
       (b.client_name && b.client_name.toLowerCase().includes(query)) ||
       (b.client_phone && b.client_phone.includes(query)) ||
       (b.service_title && b.service_title.toLowerCase().includes(query))
