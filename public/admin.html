@@ -71,7 +71,7 @@
       <div class="w-11 h-11 rounded-2xl bg-brand grid place-items-center text-lg"><i class="fa-solid fa-chart-line"></i></div>
       <div>
         <div class="font-extrabold leading-tight">لوحة الإدارة</div>
-        <div class="text-xs text-slate-400">حجوزات المساج</div>
+        <div class="text-xs text-slate-400">حجوزات المساج · نسخة 2</div>
       </div>
     </div>
 
@@ -832,7 +832,7 @@ ${note ? '📌 ' + note : ''}`;
         adminLogout();
       } else {
         const err = await res.json().catch(() => ({}));
-        toast(err.error || 'تعذر حفظ الحساب', false);
+        toast((err.error || 'تعذر حفظ الحساب') + (err.detail ? ' — ' + err.detail : ''), false);
       }
     } catch (_) {
       toast('خطأ في الاتصال بالسيرفر', false);
@@ -1002,7 +1002,7 @@ ${note ? '📌 ' + note : ''}`;
         adminLogout();
       } else {
         const err = await res.json().catch(() => ({}));
-        toast(err.error || 'تعذر تحديث الحجز', false);
+        toast((err.error || 'تعذر تحديث الحجز') + (err.detail ? ' — ' + err.detail : ''), false);
       }
     } catch (_) {
       toast('خطأ في الاتصال', false);
