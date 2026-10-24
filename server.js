@@ -68,7 +68,7 @@ app.use('/api/admin', adminAuth);
 // ==========================================
 // Static files
 // ==========================================
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'allow' }));
 
 // ==========================================
 // PostgreSQL (Neon)
@@ -191,7 +191,10 @@ app.get('/api/health', (req, res) => {
     env: {
       ADMIN_PASSWORD: !!process.env.ADMIN_PASSWORD,
       DATABASE_URL: !!process.env.DATABASE_URL,
-      JWT_SECRET: !!process.env.JWT_SECRET
+      JWT_SECRET: !!process.env.JWT_SECRET,
+      VAPID_PUBLIC_KEY: !!process.env.VAPID_PUBLIC_KEY,
+      VAPID_PRIVATE_KEY: !!process.env.VAPID_PRIVATE_KEY,
+      VAPID_SUBJECT: !!process.env.VAPID_SUBJECT
     }
   });
 });
