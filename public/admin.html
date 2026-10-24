@@ -297,7 +297,7 @@
           <input id="sPass" type="text" class="field-dark" dir="ltr" autocomplete="new-password">
           <button id="genPassBtn" type="button" onclick="document.getElementById('sPass').value = genPass()" class="glass rounded-2xl px-4 text-sm whitespace-nowrap hover:bg-white/20">توليد</button>
         </div>
-        <span class="text-xs text-slate-400">8 أحرف على الأقل. سلّمها للموظف، ولن تظهر مرة أخرى.</span>
+        <span class="text-xs text-slate-400">8 أحرف على الأقل. سلّمها للموظف، وتبقى ظاهرة لك في بطاقة الموظف.</span>
       </div>
     </div>
 
@@ -736,15 +736,68 @@ ${note ? '📌 ' + note : ''}`;
     }
 
     grid.innerHTML = members.map(m => `
-      <div class="bg-white border border-slate-100 rounded-3xl p-5 flex items-center gap-4">
-        <img src="${esc(m.photo_url || BLANK)}" class="w-16 h-16 rounded-2xl object-cover bg-slate-100 shrink-0" alt="">
-        <div class="flex-1 min-w-0">
-          <h4 class="text-sm font-bold text-slate-900 truncate">${esc(staffName(m))}</h4>
-          <p class="text-xs text-slate-400 mt-0.5" dir="ltr" style="text-align:right">${esc(m.phone)}</p>
+      <div class="bg-white border border-slate-100 rounded-3xl p-5 space-y-3">
+        <div class="flex items-center gap-4">
+          <img src="${esc(m.photo_url || BLANK)}" class="w-16 h-16 rounded-2xl object-cover bg-slate-100 shrink-0" alt="">
+          <div class="flex-1 min-w-0">
+            <h4 class="text-sm font-bold text-slate-900 truncate">${esc(staffName(m))}</h4>
+            <p class="text-xs text-slate-400 mt-0.5" dir="ltr" style="text-align:right">${esc(m.phone)}</p>
+          </div>
+          <button onclick="deleteStaff('${esc(m.id)}')" class="text-rose-500 hover:text-rose-700 p-2 text-sm" title="حذف الحساب"><i class="fa-solid fa-trash"></i></button>
         </div>
-        <button onclick="deleteStaff('${esc(m.id)}')" class="text-rose-500 hover:text-rose-700 p-2 text-sm" title="حذف الحساب"><i class="fa-solid fa-trash"></i></button>
+        <div class="bg-slate-50 rounded-2xl p-3 text-xs space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-bold text-slate-500">رقم الدخول</span>
+            <span dir="ltr" class="font-bold text-slate-800 select-all">${esc(m.phone)}</span>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-bold text-slate-500">كلمة المرور</span>
+            ${m.password
+              ? `<span class="flex items-center gap-2">
+                   <span dir="ltr" id="pw-${esc(m.id)}" class="font-mono font-bold text-slate-800 select-all">••••••••</span>
+                   <button type="button" onclick="togglePw('${esc(m.id)}')" class="text-brand" title="إظهار / إخفاء"><i class="fa-regular fa-eye"></i></button>
+                   <button type="button" onclick="copyPw('${esc(m.id)}')" class="text-brand" title="نسخ"><i class="fa-regular fa-copy"></i></button>
+                 </span>`
+              : `<span class="text-slate-400">غير محفوظة (حساب قديم)</span>`}
+          </div>
+          <button type="button" onclick="changePw('${esc(m.id)}')" class="w-full bg-white border border-slate-200 hover:bg-slate-100 rounded-xl py-1.5 font-bold text-slate-700">
+            <i class="fa-solid fa-key ml-1"></i> ${m.password ? 'تغيير كلمة المرور' : 'تعيين كلمة مرور جديدة'}
+          </button>
+        </div>
       </div>
     `).join('');
+  }
+
+  function findStaff(id) { return staffMembers.find(x => String(x.id) === String(id)); }
+
+  function togglePw(id) {
+    const m = findStaff(id), el = $('pw-' + id);
+    if (!m || !el) return;
+    el.textContent = el.dataset.shown === '1' ? '••••••••' : m.password;
+    el.dataset.shown = el.dataset.shown === '1' ? '0' : '1';
+  }
+
+  async function copyPw(id) {
+    const m = findStaff(id);
+    if (!m || !m.password) return;
+    try { await navigator.clipboard.writeText(m.password); toast('تم نسخ كلمة المرور'); }
+    catch (_) { toast(m.password); }
+  }
+
+  async function changePw(id) {
+    const pw = prompt('اكتب كلمة المرور الجديدة (8 أحرف على الأقل):', genPass());
+    if (pw === null) return;
+    if (pw.trim().length < 8) { toast('كلمة المرور يجب أن تكون 8 أحرف على الأقل', false); return; }
+    try {
+      const res = await adminFetch(`${API_BASE_URL}/admin/staff/${id}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw.trim() })
+      });
+      if (res.ok) { toast('✅ تم تغيير كلمة المرور'); fetchServerData(); }
+      else if (res.status === 401) adminLogout();
+      else { const e = await res.json().catch(() => ({})); toast(e.error || 'تعذر تغيير كلمة المرور', false); }
+    } catch (_) { toast('خطأ في الاتصال', false); }
   }
 
   function openStaffModal() {

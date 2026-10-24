@@ -135,6 +135,8 @@ function initDatabase() {
 
       await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT');
       await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT');
+      // plain copy of the staff password so the admin can view it later (admin-only endpoint)
+      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_plain TEXT');
 
       // If users.role is a Postgres ENUM, make sure it accepts 'therapist' and 'driver'
       try {
@@ -323,7 +325,7 @@ app.get('/api/admin/staff', async (req, res) => {
   try {
     // "name" is returned as an alias of full_name so both field names work in the admin page
     const result = await pool.query(
-      `SELECT id, full_name, full_name AS name, phone, role::text AS role, photo_url
+      `SELECT id, full_name, full_name AS name, phone, role::text AS role, photo_url, password_plain AS password
        FROM users
        WHERE role::text IN ('therapist', 'driver')
        ORDER BY full_name`
@@ -366,16 +368,38 @@ app.post('/api/admin/staff', async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      `INSERT INTO users (full_name, phone, role, password_hash, photo_url)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, full_name, full_name AS name, phone, role::text AS role, photo_url`,
-      [fullName, phone, role, hash, photo]
+      `INSERT INTO users (full_name, phone, role, password_hash, password_plain, photo_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, full_name, full_name AS name, phone, role::text AS role, photo_url, password_plain AS password`,
+      [fullName, phone, role, hash, password, photo]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('❌ Error creating staff:', error);
     const code = error.code === '22P02' ? 400 : 500;
     res.status(code).json({ error: 'Could not create the account', detail: error.message });
+  }
+});
+
+app.put('/api/admin/staff/:id/password', async (req, res) => {
+  const { id } = req.params;
+  const password = String((req.body || {}).password || '');
+  if (!UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid id' });
+  if (password.length < 8 || Buffer.byteLength(password) > 72) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const r = await pool.query(
+      `UPDATE users SET password_hash = $1, password_plain = $2
+       WHERE id = $3 AND role::text IN ('therapist', 'driver') RETURNING id`,
+      [hash, password, id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('❌ Error changing staff password:', error);
+    res.status(500).json({ error: 'Could not change the password', detail: error.message });
   }
 });
 
